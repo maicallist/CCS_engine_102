@@ -53,6 +53,8 @@ bind(ENGINE *e, const char *d)
         || !ENGINE_set_destroy_function(e, ccs_engine_destroy))
         return 0;
 
+    ERR_load_CCS_strings();
+
     return 1;
 }
 
