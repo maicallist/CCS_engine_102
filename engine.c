@@ -78,6 +78,7 @@ bind(ENGINE *e, const char *d)
 
     int nid = OBJ_create(OID_sm3, SN_sm3, LN_sm3);
     evp_md_sm3_set_nid(nid);
+    EVP_add_digest(EVP_sm3());
 
     if (!ENGINE_set_digests(e, ccs_digest_selector))
         return 0;
