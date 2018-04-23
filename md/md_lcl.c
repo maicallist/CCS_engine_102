@@ -49,6 +49,13 @@ EVP_sm3()
     return &evp_md_sm3;
 }
 
+void
+evp_md_sm3_set_nid(int nid)
+{
+    evp_md_sm3.type = nid;
+    ccs_digest_ids = nid;
+}
+
 int
 evp_sm3_init(EVP_MD_CTX *ctx)
 {

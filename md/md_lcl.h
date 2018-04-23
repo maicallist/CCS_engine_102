@@ -51,6 +51,9 @@ static int ccs_digest_ids =
 EVP_MD *
 EVP_sm3();
 
+void
+evp_md_sm3_set_nid(int nid);
+
 #ifdef __cplusplus
 }
 #endif

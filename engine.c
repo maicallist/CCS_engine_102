@@ -76,6 +76,12 @@ bind(ENGINE *e, const char *d)
         || !ENGINE_set_destroy_function(e, ccs_engine_destroy))
         return 0;
 
+    int nid = OBJ_create(OID_sm3, SN_sm3, LN_sm3);
+    evp_md_sm3_set_nid(nid);
+
+    if (!ENGINE_set_digests(e, ccs_digest_selector))
+        return 0;
+
     ERR_load_CCS_strings();
 
     return 1;
