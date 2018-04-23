@@ -20,6 +20,8 @@
 
 #include <openssl/engine.h>
 #include "err/ccs_err.h"
+#include "md/md_lcl.h"
+#include "conf/objects.h"
 
 static const char *engine_id = "ccs";
 static const char *engine_name = "ccs_engine";
@@ -41,6 +43,27 @@ static int
 ccs_engine_destroy(ENGINE *e)
 {
     return 1;
+}
+
+static int
+ccs_digest_selector(ENGINE *e, const EVP_MD **digest, const int **nids, int nid)
+{
+    if (!digest)
+    {
+        *nids = &ccs_digest_ids;
+        return 1; /* one algor available */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm3))
+    {
+        *digest = EVP_sm3();
+        return 1;
+    }
+
+    CCSerr(CCS_F_MD_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *digest = NULL;
+
+    return 0;
 }
 
 static int

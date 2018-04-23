@@ -70,12 +70,14 @@
 # define ERR_REASON(reason) ERR_PACK(ERR_LIB_CCS,0,reason)
 
 static ERR_STRING_DATA CCS_str_functs[] = {
+    {ERR_FUNC(CCS_F_MD_SELECT), "MD_SELECT"},
     {ERR_FUNC(CCS_F_RESERVED), "RESERVED"},
     {0, NULL}
 };
 
 static ERR_STRING_DATA CCS_str_reasons[] = {
     {ERR_REASON(CCS_R_RESERVED), "reserved"},
+    {ERR_REASON(CCS_R_UNSUPPORTED_ALGORITHM), "unsupported algorithm"},
     {0, NULL}
 };
 
