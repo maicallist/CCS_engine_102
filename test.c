@@ -149,18 +149,15 @@ test_md(int caseno)
         return 0;
     }
 
-    int err = 0;
-    //err = ENGINE_set_default_digests(engine);
-
     unsigned char *digest = OPENSSL_malloc(sizeof(unsigned char) * 32);
     unsigned int digest_size = 0;
 
     EVP_MD_CTX *evp_md_ctx;
     evp_md_ctx = EVP_MD_CTX_create();
 
-    err = EVP_DigestInit_ex(evp_md_ctx, EVP_get_digestbyname("SM3"), engine);
-    err = EVP_DigestUpdate(evp_md_ctx, sptr, len);
-    err = EVP_DigestFinal(evp_md_ctx, digest, &digest_size);
+    EVP_DigestInit_ex(evp_md_ctx, EVP_get_digestbyname("sm3-256"), engine);
+    EVP_DigestUpdate(evp_md_ctx, sptr, len);
+    EVP_DigestFinal(evp_md_ctx, digest, &digest_size);
 
     printf("digest result:\n");
     for (int i = 0; i < digest_size; ++i)
