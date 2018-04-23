@@ -4,7 +4,9 @@ RUN		= test
 
 DEP_pack	= bin/pack.o
 DEP_engine	= bin/engine.o
+DEP_err		= bin/err.o
 
+SRC_err		= err/ccs_err.c
 SRC_engine	= engine.c
 SRC_run		= test.c
 
@@ -17,10 +19,13 @@ dir :
 $(LIB) : $(DEP_pack)
 	$(CC) -shared -o $@ $<
 
-$(DEP_pack) : $(DEP_engine)
+$(DEP_pack) : $(DEP_engine) $(DEP_err)
 	ld -r -o $@ $?
 
 $(DEP_engine) : $(SRC_engine)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_err) : $(SRC_err)
 	$(CC) $(FLAG_dep) -o $@ -c $<
 
 $(RUN) : $(SRC_run)

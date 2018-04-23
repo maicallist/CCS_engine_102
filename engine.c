@@ -19,6 +19,7 @@
  */
 
 #include <openssl/engine.h>
+#include "err/ccs_err.h"
 
 static const char *engine_id = "ccs";
 static const char *engine_name = "ccs_engine";
@@ -26,6 +27,7 @@ static const char *engine_name = "ccs_engine";
 static int
 ccs_engine_init(ENGINE *e)
 {
+    CCSerr(CCS_F_RESERVED, CCS_R_RESERVED);
     return 1;
 }
 

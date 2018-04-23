@@ -36,6 +36,10 @@ main()
     tests++;
     pass += load_engine();
 
+    printf("Following error is generated for testing...\n");
+    ERR_print_errors_fp(stderr);
+    printf("\n");
+
     engine_cleanup();
 
     printf("Test Summary:\nTotal: %d, Passed: %d, Failed: %d\n",
