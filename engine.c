@@ -21,7 +21,7 @@
 #include <openssl/engine.h>
 
 static const char *engine_id = "ccs";
-static const char *engine_name = "CCS_ENGINE";
+static const char *engine_name = "ccs_engine";
 
 static int
 ccs_engine_init(ENGINE *e)
