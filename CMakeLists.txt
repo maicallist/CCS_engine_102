@@ -3,4 +3,4 @@ project(ccs_engine C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(ccs_engine test.c)
+add_executable(ccs_engine test.c engine.c)
