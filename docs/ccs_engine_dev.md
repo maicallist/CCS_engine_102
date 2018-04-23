@@ -15,11 +15,11 @@
     * [OpenSSL Config]          (#openssl_config)
     * [Test Program]            (#test_program)
     * [Makefile]                (#makefile)
-* [Message Digest Algorithm]    (#message_digest_algorithm)
-    * [OID and NID]             (#oid_and_nid)
-    * [Test Message Digest]     (#test_message_digest)
     * [Error Handling]          (#error_handling)
     * [Test Error]              (#test_error)
+* [Message Digest Algorithm]    (#message_digest_algorithm)
+    * [OID and NID]             (#oid_and_nid)
+    * [Test Message Digest]     (#test_message_digest)  
 * [ECDH]                        (#ecdh)
     * [Make Your Life Easier]   (#make_life)
     * [GOST Engine]             (#ccgost)
@@ -113,7 +113,7 @@ A minimal engine requires few things from OpenSSL.
 First, compatibility check.  
 
 ```
-//file engine.c
+// engine.c
 #include <openssl/engine.h>
 
 IMPLEMENT_DYNAMIC_BIND_FN(bind)
@@ -123,7 +123,7 @@ IMPLEMENT_DYNAMIC_CHECK_FN()
 Second, bind the engine.
 
 ```
-//file engine.c
+// engine.c
 #include <openssl/engine.h>  
 
 static int
@@ -167,14 +167,12 @@ ccs_engine_destroy(ENGINE *e)
 static int
 bind(ENGINE *e, const char *d)
 {
-    if (!ENGINE_set_id(e, engine_id) ||
-        !ENGINE_set_name(e, engine_name) ||
-        !ENGINE_set_init_function(e, ccs_engine_init) ||
-        !ENGINE_set_finish_function(e, ccs_engine_finish) ||
-        !ENGINE_set_destroy_function(e, ccs_engine_destroy))
-    {
+    if (!ENGINE_set_id(e, engine_id)
+        || !ENGINE_set_name(e, engine_name)
+        || !ENGINE_set_init_function(e, ccs_engine_init)
+        || !ENGINE_set_finish_function(e, ccs_engine_finish)
+        || !ENGINE_set_destroy_function(e, ccs_engine_destroy))
         return 0;
-    }
 
     return 1;
 }
@@ -294,7 +292,7 @@ Now, when we want to load our engine, we have tell OpenSSL the app name in confi
 Next, use code to find our engine.
 
 ```
-// main.c
+// test.c
 
 #include <stdio.h>
 
@@ -454,3 +452,152 @@ Total: 1, Passed: 1, Failed: 0
 
 ```
 Check with valgrind or equivalent to make sure there is no leak.
+
+### <a name = "error_handling"></a> Error Handling
+
+OpenSSL has an internal error queue to log and report errors, containing function identifier and reason identifier. You can define your own function & reason codes, but that would take a lot of effort to keep tracking codes you have used. 
+
+OpenSSL provides a useful tool ```mkerr.pl``` in util folder, it scans your source code file, automatically index all ```#define``` that matches following pattern:   
+```
+[A-Za-z0-9]+_(F|R)_[A-Za-z0-9]+
+```
+
+F stands for functions, and R stands for reasons. You can have a look OpenSSL header files, generated codes looks like this:
+
+```
+/* Error codes for the ECDSA functions. */
+
+/* Function codes. */
+# define ECDSA_F_ECDSA_CHECK                              104
+# define ECDSA_F_ECDSA_DATA_NEW_METHOD                    100
+# define ECDSA_F_ECDSA_DO_SIGN                            101
+# define ECDSA_F_ECDSA_DO_VERIFY                          102
+# define ECDSA_F_ECDSA_METHOD_NEW                         105
+# define ECDSA_F_ECDSA_SIGN_SETUP                         103
+
+/* Reason codes. */
+# define ECDSA_R_BAD_SIGNATURE                            100
+# define ECDSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE              101
+# define ECDSA_R_ERR_EC_LIB                               102
+# define ECDSA_R_MISSING_PARAMETERS                       103
+# define ECDSA_R_NEED_NEW_SETUP_VALUES                    106
+# define ECDSA_R_NON_FIPS_METHOD                          107
+# define ECDSA_R_RANDOM_NUMBER_GENERATION_FAILED          104
+# define ECDSA_R_SIGNATURE_MALLOC_FAILED                  105
+
+```
+
+First, we need a config file for this script. 
+This config will tell script what are the names of generated files.
+
+```
+// ccs.ec
+
+L   ERR     NONE                NONE
+L   CCS     ../err/ccs_err.h    ../err/ccs_err.c
+```
+
+Second, put new error codes in your source file.
+
+```
+// engine.c
+
+#define CCS_F_RESERVED
+#define CCS_R_RESERVED
+```
+
+Third, run the script
+
+```
+bash_prompt > perl mkerr.pl -conf /path/to/ccs.ec -reindex -write /path/to/engine.c
+```
+
+-----
+_##warning##_
+
+I know nothing about perl, I found out how to use this script by trail and error, so look through `mkerr.pl` yourself.
+
+----
+Now two files ccs\_err.h and ccs\_err.c should be generated. You may need to fix some obvious errors caused by the script. One thing you will notice is, the generated code references our lib as `ERR_LIB_CCS`, but this is never defined. You can have a look at OpenSSL `/crypto/err/err.h`, it contains many defined libs, up to 128.  I don't want to touch OpenSSL source file, so we have to make our own.
+
+```
+// ccs_err.h
+
+/*
+ * FIXME LIB ID
+ * ERR_LIB_CCS is not auto generated, and may conflict with further version.
+ */
+#define ERR_LIB_CCS            255
+
+#define CCSerr(f, r) ERR_PUT_error(ERR_LIB_CCS, (f), (r), __FILE__, __LINE__)
+
+```
+OpenSSL provides a way of getting lib id at runtime by using `ERR_get_next_error_library()`, but this requires us replace ERR\_LIB\_CCS with a variable. Since we are going to call this script later to update more codes. Right now let's just leave it. 
+
+One last thing, every function and reason can be displayed either as number (like 100), or as text. To make error output more readable, we can load error string so OpenSSL will display error text when encounter errors.
+
+```
+// engine.c
+
+static int
+bind(ENGINE *e, const char *d)
+{
+    if (!ENGINE_set_id(e, engine_id)
+        || !ENGINE_set_name(e, engine_name)
+        || !ENGINE_set_init_function(e, ccs_engine_init)
+        || !ENGINE_set_finish_function(e, ccs_engine_finish)
+        || !ENGINE_set_destroy_function(e, ccs_engine_destroy))
+        return 0;
+
+    ERR_load_CCS_strings();
+
+    return 1;
+}
+```
+
+### <a name = "test_error"></a> Test Error
+To test our error handling, we can deliberately raise an error.
+
+```
+// engine.c
+
+static int
+ccs_engine_init(ENGINE *e)
+{
+    CCSerr(CCS_F_RESERVED, CCS_R_RESERVED);
+    return 14;
+}
+```
+```
+// test.c
+
+int
+main()
+{
+    printf("We're using OpenSSL version %s.\n", OPENSSL_VERSION_TEXT);
+
+    int tests = 0, pass = 0;
+
+    tests++;
+    pass += load_engine();
+
+    printf("Following error is generated for testing...\n");
+    ERR_print_errors_fp(stderr);
+    printf("\n");
+
+    engine_cleanup();
+    // .. //
+}
+```
+
+In output, if we observe something like:
+
+```
+// .. //
+
+Following error is generated for testing...
+139730363631296:error:FF064064:lib(255):func(100):reason(100):engine.c:30:
+
+// .. //
+```
+Then we did it.
