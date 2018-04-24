@@ -17,7 +17,7 @@
     * [Makefile]                (#makefile)
     * [Error Handling]          (#error_handling)
     * [Test Error]              (#test_error)
-* [Message Digest Algorithm]    (#message_digest_algorithm)
+* [Digest]                      (#digest)
     * [OID and NID]             (#oid_and_nid)
     * [Test Message Digest]     (#test_message_digest)  
 * [ECDH]                        (#ecdh)
@@ -601,3 +601,447 @@ Following error is generated for testing...
 // .. //
 ```
 Then we did it.
+
+## <a name="digest"></a> Digest
+
+Our engine is up and running, it's time we start our business. First, we are going to insert a message digest algorithm SM3 into OpenSSL.
+
+OpenSSL defines a struct in ```evp.h``` to hold message digest algorithm information, called```EVP_MD_CTX```.
+
+```
+struct env_md_ctx_st {
+    const EVP_MD *digest;       /* functions related to the algorithm */
+    ENGINE *engine;             /* functional reference if 'digest' is
+                                 * ENGINE-provided */
+    unsigned long flags;
+    void *md_data;              /* store you algorithm-specific data */
+    /* Public key context for sign/verify */
+    EVP_PKEY_CTX *pctx;
+    /* Update function: usually copied from EVP_MD */
+    int (*update) (EVP_MD_CTX *ctx, const void *data, size_t count);
+} /* EVP_MD_CTX */ ;
+```
+
+And the algorithm itself in referenced by ```EVP_MD```struct, which has following structure.
+
+```
+struct env_md_st {
+    int type;
+    int pkey_type;
+    int md_size;
+    unsigned long flags;
+    int (*init) (EVP_MD_CTX *ctx);
+    int (*update) (EVP_MD_CTX *ctx, const void *data, size_t count);
+    int (*final) (EVP_MD_CTX *ctx, unsigned char *md);
+    int (*copy) (EVP_MD_CTX *to, const EVP_MD_CTX *from);
+    int (*cleanup) (EVP_MD_CTX *ctx);
+    /* FIXME: prototype these some day */
+    int (*sign) (int type, const unsigned char *m, unsigned int m_length,
+                 unsigned char *sigret, unsigned int *siglen, void *key);
+    int (*verify) (int type, const unsigned char *m, unsigned int m_length,
+                   const unsigned char *sigbuf, unsigned int siglen,
+                   void *key);
+    int required_pkey_type[5];  /* EVP_PKEY_xxx */
+    int block_size;
+    int ctx_size;               /* how big does the ctx->md_data need to be */
+    /* control function */
+    int (*md_ctrl) (EVP_MD_CTX *ctx, int cmd, int p1, void *p2);
+} /* EVP_MD */ ;
+```
+
+We need to create our own EVP_MD, fill in SM3 algorithm content.
+
+```
+// md_lcl.c
+
+static EVP_MD evp_md_sm3 =
+    {
+    NID_undef,                          // type, nid
+    NID_undef,                          // pkey type
+    32,                                 // digest output length
+    EVP_MD_FLAG_PKEY_METHOD_SIGNATURE,
+    evp_sm3_init,
+    evp_sm3_update,
+    evp_sm3_final,
+    evp_sm3_copy,
+    evp_sm3_cleanup,
+    NULL,                               // <- unknown
+    NULL,                               // <- unknown
+    {NID_undef, NID_undef, 0, 0, 0}
+    64,                                 // block size
+    sizeof(sm3_ctx_t),                  // size of md_data
+    NULL
+    };
+```
+
+The usage of some elements in EVP_MD is still unknown, but from name (\*sign & \*verify) we can easily guess that they are part of signature scheme. We'll find out them when we create ECDSA algorithm.  
+In order to make this struct accessible, we need a accessor in `md_lcl.h`.
+
+```
+// md_lcl.h
+
+EVP_MD *
+EVP_sm3();
+
+// md_lcl.c
+EVP_MD *
+EVP_sm3()
+{
+    return &evp_md_sm3;
+}
+```
+
+
+Also we need to finish the functions we just registered in EVP_MD.
+
+```
+// md_lcl.h
+
+int
+evp_sm3_init(EVP_MD_CTX *ctx)
+{
+    sm3_init(ctx->md_data);
+    return 1;
+}
+
+int
+evp_sm3_update(EVP_MD_CTX *ctx, const void *data, size_t len)
+{
+    sm3_update(ctx->md_data, data, len);
+    return 1;
+}
+
+int
+evp_sm3_final(EVP_MD_CTX *ctx, unsigned char *digest)
+{
+    sm3_final(ctx->md_data, digest);
+    return 1;
+}
+
+int
+evp_sm3_copy(EVP_MD_CTX *to, const EVP_MD_CTX *from)
+{
+    if (to->md_data && from->md_data)
+        memcpy(to->md_data, from->md_data, sizeof(from->md_data));
+    return 1;
+}
+
+int
+evp_sm3_cleanup(EVP_MD_CTX *ctx)
+{
+    if (ctx->md_data)
+        memset(ctx->md_data, 0, sizeof(ctx->md_data));
+    return 1;
+}
+```
+
+It's quite clear that all five functions in ```md_lcl.c``` are just wrappers, the actual functions are defined and implemented in ```sm3_hash.c```, SM3 algorithm details are outside the scope of this document. 
+
+-----
+To help you understand better, we have following project structure.
+
+```
+project
+    |
+    -- engine.c         // engine that loads wrapped functions to perform SM3 hash
+    |
+    -- md/
+        |
+        -- md_lcl.*     // engine function wrappers
+        |
+        -- sm3_hash.*   // SM3 specific functions
+        
+```
+
+SM3 operates on a struct called ```md_ctx_t``` defined in ```sm3_hash.*```.   
+At runtime, this struct is referenced by ```void *md_data``` pointer in ```EVP_MD_CTX```.   
+Also SM3 functions implemented in ```sm3_hash.* ``` is referenced by ```EVP_MD *digest``` field in ```EVP_MD_CTX```.
+
+-----
+
+Above function wrappers have link to correct SM3 functions, and all wrappers are registered in EVP\_MD struct we created for SM3. Now we only need to tell EVP interface how to select our algorithm.
+
+```
+// md_lcl.h
+
+static int ccs_digest_ids =
+    {
+        NID_undef
+    };
+``` 
+
+```
+// engine.c
+
+static int
+ccs_digest_selector(ENGINE *e,
+                        const EVP_MD **digest,
+                        const int **nids,
+                        int nid)
+{
+    if (!digest)
+    {
+        *nids = &ccs_digest_ids;
+        return 1; /* one algor available */
+    }
+
+    if (nid == ??)
+    {
+        *digest = EVP_sm3();
+        return 1;
+    }
+
+    CCSerr(CCS_F_MD_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *digest = NULL;
+
+    return 0;
+}
+```
+**Note** we have define one new function and one new reason.  
+run `mkerr` script on `engine.c` to update error codes (do not reindex).
+
+```
+bash_prompt > perl mkerr.pl -conf /path/to/ccs.ec -write /path/to/engine.c
+```
+
+
+### <a name = "oid_and_nid"></a> OID and NID
+
+We now need to revisit three lines of code we write before.
+
+```
+// engine.c
+
+if (nid == ??)                  // we just wrote this line
+
+// md_lcl.h
+
+static int ccs_digest_ids =
+    {
+        NID_undef               // and this line too
+    };
+
+// md_lcl.c
+
+static EVP_MD evp_md_sm3 =
+    {
+    NID_undef,                  // this line we wrote while ago, nid
+    NID_undef,                          
+    32,                                 
+    EVP_MD_FLAG_PKEY_METHOD_SIGNATURE,
+    evp_sm3_init,
+    evp_sm3_update,
+    evp_sm3_final,
+    evp_sm3_copy,
+    evp_sm3_cleanup,
+    NULL,                               
+    NULL,                               
+    {NID_undef, NID_undef, 0, 0, 0}
+    64,                                 
+    sizeof(sm3_ctx_t),                    
+    NULL
+    };
+```
+
+You may already have the idea that we are going to fill in a ```NID``` for SM3, OpenSSL uses this ID to locate various objects, including algorithm struct. So, it has to be unique.
+
+A naive solution would be change type NID_undef to a int, a very large int, say 99999. Even it works this time, but it may conflict with future versions, Or maybe conflict with someone has the same idea and created some other engines. A nice way of doing this would be assign the NID dynamically.
+
+The [tutorial](https://wiki.openssl.org/index.php/Creating_an_OpenSSL_Engine_to_use_indigenous_ECDH_ECDSA_and_HASH_Algorithms) from OpenSSL wiki failed to mention this. It cheated by stealing NID from SHA256. But we got some information from [OpenSSL Mailing List](https://mta.openssl.org/pipermail/openssl-dev/2016-December/008931.html)
+
+Here I qoute:
+
+```
+********************
+levitte> xoloki> > May I suggest you have a look at the GOST engine?  It does implement
+levitte> xoloki> > the algorithm entirely in the engine.  The only things added in the
+levitte> xoloki> > OpenSSL code are the OIDs (not strictly necessary) and the TLS
+levitte> xoloki> > ciphersuites (I don't think that can be done dynamically at all, at
+levitte> xoloki> > least yet).
+levitte> xoloki> 
+levitte> xoloki> How are the OIDs not necessary?  What about the NIDs?
+levitte> 
+levitte> It's not stricly necessary to add them statically in the libcrypto
+levitte> code.  They can be added dynamically by the engine by calling
+levitte> OBJ_create() with the correct arguments.
+
+Applications will then have to find out the nid by calling
+OBJ_txt2nid, OBJ_sn2nid or OBJ_ln2nid, depending on the data they
+have.  Note: this can already be done for the built in OIDs.
+
+Cheers,
+Richard
+
+-- 
+```
+
+Our objective is clear, use **OBJ_create()** and one of three **OBJ_sth2nid** to create a new NID for SM3. 
+
+In a separate header file, I define following
+
+```
+// conf/objects.h
+
+// OID, Long name, Short name of SM3
+
+#define OID_sm3             "1.2.156.10197.1.401.1"
+#define SN_sm3              "sm3-256"
+#define LN_sm3              "sm3-256"
+```
+OID has its own meaning, 2.16.156 is assigned to China, you can check up on [this website](http://www.alvestrand.no/objectid/).
+
+Now that we have what we need to know, it's time to create NID for SM3, bind it with our engine and register it to internal table so EVP interface can find it.
+
+```
+// engine.c
+
+static int
+bind(ENGINE *e, const char *d)
+{
+    int ret = 0;
+    
+    // .. // 
+    
+    int nid = OBJ_create(OID_sm3, SN_sm3, LN_sm3);
+    evp_md_sm3_set_nid(nid);
+    EVP_add_digest(EVP_sm3());
+
+    if (!ENGINE_set_digests(e, ccs_digest_selector))
+        return 0;
+        
+    // .. //
+}
+```
+***Don't forgot*** to change the ```if (nid == ??)``` to ```if (nid == OBJ_sn2nid(SN_sm3))```.
+
+### <a name = "test_message_digest"></a> Test Message Digest
+
+```
+// test.c
+
+int
+test_md(int caseno)
+{
+    size_t len;
+    char *sptr;
+    unsigned char *eptr;
+
+    if (caseno == 1)
+    {
+        printf("begin md test case 1...\n");
+        char str[] = "abc";
+        unsigned char expect[] =
+            {0x66, 0xc7, 0xf0, 0xf4, 0x62, 0xee, 0xed, 0xd9, 0xd1, 0xf2, 0xd4,
+                0x6b, 0xdc, 0x10, 0xe4, 0xe2, 0x41, 0x67, 0xc4, 0x87, 0x5c,
+                0xf2, 0xf7, 0xa2, 0x29, 0x7d, 0xa0, 0x2b, 0x8f, 0x4b, 0xa8,
+                0xe0};
+        len = strlen(str);
+        sptr = str;
+        eptr = expect;
+    }
+    else if (caseno == 2)
+    {
+        printf("begin md test case 2...\n");
+        char str[] =
+            {0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63,
+                0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61,
+                0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63,
+                0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61,
+                0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63,
+                0x64, 0x61, 0x62, 0x63, 0x64, 0x61, 0x62, 0x63, 0x64, 0x61,
+                0x62, 0x63, 0x64};
+        unsigned char expect[] =
+            {0xde, 0xbe, 0x9f, 0xf9, 0x22, 0x75, 0xb8, 0xa1, 0x38, 0x60, 0x48,
+                0x89, 0xc1, 0x8e, 0x5a, 0x4d, 0x6f, 0xdb, 0x70, 0xe5, 0x38,
+                0x7e, 0x57, 0x65, 0x29, 0x3d, 0xcb, 0xa3, 0x9c, 0x0c, 0x57,
+                0x32};
+        len = 64;
+        sptr = str;
+        eptr = expect;
+    }
+    else
+    {
+        FAIL;
+        return 0;
+    }
+
+    unsigned char *digest = OPENSSL_malloc(sizeof(unsigned char) * 32);
+    unsigned int digest_size = 0;
+
+    EVP_MD_CTX *evp_md_ctx;
+    evp_md_ctx = EVP_MD_CTX_create();
+
+    EVP_DigestInit_ex(evp_md_ctx, EVP_get_digestbyname("sm3-256"), engine);
+    EVP_DigestUpdate(evp_md_ctx, sptr, len);
+    EVP_DigestFinal(evp_md_ctx, digest, &digest_size);
+
+    printf("digest result:\n");
+    for (int i = 0; i < digest_size; ++i)
+    {
+        printf("%02x", digest[i]);
+        if (!((i + 1) % 4))
+            printf(" ");
+    }
+    printf("\n");
+
+    int pass = CRYPTO_memcmp(digest, eptr, 32);
+    if (pass)
+        FAIL;
+    else
+        PASS;
+
+    /* finalize */
+    EVP_MD_CTX_destroy(evp_md_ctx);
+    OPENSSL_free(digest);
+
+    return (pass) ? 0 : 1;
+}
+```
+
+Also update our Makefile
+
+```
+// Makefile
+
+DEP_pack_md	= bin/pack_md.o
+DEP_sm3		= bin/sm3.o
+DEP_md_link	= bin/md_lcl.o
+
+SRC_md_link	= md/md_lcl.c
+SRC_sm3		= md/sm3_hash.c
+
+// .. //
+
+$(DEP_pack) : $(DEP_engine) $(DEP_err) $(DEP_pack_md)
+	ld -r -o $@ $?
+	
+$(DEP_pack_md) : $(DEP_sm3) $(DEP_md_link)
+	ld -r -o $@ $?
+
+$(DEP_sm3) : $(SRC_sm3)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_md_link) : $(SRC_md_link)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+	
+// .. //
+```
+
+Compile and run by
+
+```
+make all
+./test
+```
+
+
+The message digest of "abc" should be 
+
+```
+-----
+66c7f0f4 62eeedd9 d1f2d46b dc10e4e2 4167c487 5cf2f7a2 297da02b 8f4ba8e0
+```
+
+And the message digest of "....", anyway, look for two green <font color=green>```test passed```</font> in md test section.
+
+Again, check with Valgrind.
