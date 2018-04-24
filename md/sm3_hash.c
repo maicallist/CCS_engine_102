@@ -178,3 +178,16 @@ sm3_final(md_ctx_t *ctx, uint8_t hash[])
         hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
     }
 }
+
+void
+sm3(const uint8_t *d, size_t n, uint8_t *md)
+{
+    if (!md)
+        return;
+
+    md_ctx_t ctx;
+    sm3_init(&ctx);
+    sm3_update(&ctx, d, n);
+    sm3_final(&ctx, md);
+    OPENSSL_cleanse(&ctx, sizeof(ctx));
+}

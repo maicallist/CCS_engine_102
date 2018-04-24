@@ -75,6 +75,20 @@ sm3_update(md_ctx_t *ctx, const uint8_t data[], size_t length);
 void
 sm3_final(md_ctx_t *ctx, uint8_t hash[]);
 
+/**
+ * wrapper for sm3_init, sm3_update and sm3_final
+ *
+ * @param d
+ *      data to be hashed
+ * @param n
+ *      length of data in byte
+ * @param md
+ *      message digest result
+ * @return
+ */
+void
+sm3(const uint8_t *d, size_t n, uint8_t *md);
+
 #ifdef __cplusplus
 }
 #endif
