@@ -10,7 +10,7 @@ CCS_Engine implements:
 * SM3 (message digest)
 * SM4 (feistel cipher) 
 
-above algorithms which are not available in version 1.0.2(see OpenSSL 1.1.1 pre-release).
+above algorithms are not available in version 1.0.2(see OpenSSL 1.1.1).
 
 **Do not** use this project directly, as it provides no security guarantee and algorithms implemented in this engine have no optimization at all, thus suffer from horrible performance issues.
 
