@@ -78,10 +78,12 @@ void ERR_load_CCS_strings(void);
 /* Error codes for the CCS functions. */
 
 /* Function codes. */
+# define CCS_F_ASN1_REGISTRATION                          102
 # define CCS_F_MD_SELECT                                  101
 # define CCS_F_RESERVED                                   100
 
 /* Reason codes. */
+# define CCS_R_MALLOC_ERROR                               102
 # define CCS_R_RESERVED                                   100
 # define CCS_R_UNSUPPORTED_ALGORITHM                      101
 
