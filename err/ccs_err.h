@@ -79,12 +79,30 @@ void ERR_load_CCS_strings(void);
 
 /* Function codes. */
 # define CCS_F_ASN1_REGISTRATION                          102
+# define CCS_F_ECDH_DERIVE                                103
+# define CCS_F_ECDSA_DO_SIGN                              104
+# define CCS_F_ECDSA_DO_VERIFY                            105
+# define CCS_F_ECIES_DECRYPT                              106
+# define CCS_F_ECIES_ENCRYPT                              107
+# define CCS_F_EC_COMPUTE_PUBLIC                          108
+# define CCS_F_EC_FILLING_PARAMETER                       109
+# define CCS_F_EC_KEY_GEN                                 110
+# define CCS_F_EC_PARAMETER_GEN                           111
 # define CCS_F_MD_SELECT                                  101
+# define CCS_F_PKEY_CTX_INIT                              112
+# define CCS_F_PKEY_REGISTRATION                          113
 # define CCS_F_RESERVED                                   100
 
 /* Reason codes. */
+# define CCS_R_ARITHMETIC_ERROR                           103
+# define CCS_R_BN_ERROR                                   104
+# define CCS_R_EC_PARAMETER_ERROR                         105
 # define CCS_R_MALLOC_ERROR                               102
+# define CCS_R_NULL_REFERENCE                             106
+# define CCS_R_PARAMETER_ERROR                            107
+# define CCS_R_PKEY_SET_ERROR                             108
 # define CCS_R_RESERVED                                   100
+# define CCS_R_UNDEF_CURVE_ID                             109
 # define CCS_R_UNSUPPORTED_ALGORITHM                      101
 
 # ifdef  __cplusplus
