@@ -33,7 +33,7 @@ test_md(int caseno);
 int
 test_ecdh();
 
-void
+int
 test_signing();
 
 void
@@ -65,7 +65,7 @@ main()
     CASE += test_md(2);
 
     CASE += test_ecdh();
-    test_signing();
+    CASE += test_signing();
     test_verify();
     test_asym_enc();
     test_asym_dec();
@@ -345,12 +345,9 @@ test_ecdh()
     return (pass) ? 0 : 1;
 }
 
-void
+int
 test_signing()
 {
-    printf("\n");
-    //char *msg = "message digest";
-
     // za || M
     unsigned char msg[] =
         {0xf4, 0xa3, 0x84, 0x89, 0xe3, 0x2b, 0x45, 0xb6, 0xf8, 0x76, 0xe3, 0xac,
@@ -367,10 +364,6 @@ test_signing()
     ctx_sign_sta = EVP_PKEY_CTX_new_id(sm2_id, engine);
     EVP_PKEY *signing_sta = NULL;
 
-    //const char *ecdsa_priv_hex = "128b2fa8bd433c6c068c8d803dff7979a2519a55171b1b650c23661d15897263";
-    //const char *ecdsa_x_hex = "0ae4c7798aa0F119471bee11825bE46202BB79E2a5844495E97C04FF4df2548a";
-    //const char *ecdsa_y_hex = "7c0240f88f1cd4e16352a73c17b7f16f07353e53a176d684a9fe0c6bb798e857";
-
     EVP_PKEY_keygen_init(ctx_sign_sta);
     EVP_PKEY_keygen(ctx_sign_sta, &signing_sta);
 
@@ -378,35 +371,22 @@ test_signing()
     ctx_sign_eph = EVP_PKEY_CTX_new(signing_sta, engine);
     EVP_PKEY *signing_eph = NULL;
 
-    //SM2_CTX *data5 = EVP_PKEY_CTX_get_data(ctx_sign_eph);
-    //data5->static_my_key = signing_sta;
-
     EVP_PKEY_keygen_init(ctx_sign_eph);
     EVP_PKEY_keygen(ctx_sign_eph, &signing_eph);
 
-    printf("expecting ctx is %p\n", ctx_sign_eph);
-
     //evp_md_ctx->pctx = ctx_sign_sta;
-    int err = 0;
-    if (1 != (
-        err = EVP_DigestSignInit(evp_md_ctx,
-                                 NULL,
-                                 EVP_get_digestbynid(OBJ_sn2nid("sm3-256")),
-                                 engine,
-                                 signing_eph)))
-    {
-        printf("sign init fail with %d\n", err);
-        ERR_print_errors_fp(stdout);
-    }
+    if ( 1 != EVP_DigestSignInit(evp_md_ctx, NULL, EVP_get_digestbynid(OBJ_sn2nid("sm3-256")), engine, signing_eph))
+        return 0;
 
     EVP_PKEY_CTX *evp_created_ctx = evp_md_ctx->pctx;
+    EVP_PKEY_CTX_ctrl_str(evp_created_ctx, EVP_PKEY_SET_MY_KEY, (char *)signing_sta);
+    #if 0
     pkey_ctx_t *created = EVP_PKEY_CTX_get_data(evp_created_ctx);
     created->static_my_key = signing_sta;
+    #endif
 
     if (1 != EVP_DigestSignUpdate(evp_md_ctx, msg, sizeof(msg)))
-    {
-        printf("sign update fail\n");
-    }
+        return 0 ;
 
     unsigned char *sig = OPENSSL_malloc(sizeof(unsigned char) * 65);
     sig[64] = '\0';
@@ -414,12 +394,9 @@ test_signing()
 
     //FIXME unhandled return value
     EVP_DigestSignFinal(evp_md_ctx, NULL, &sig_len);
-    printf("workout len is %zd\n", sig_len);
 
     if (1 != EVP_DigestSignFinal(evp_md_ctx, sig, &sig_len))
-    {
-        printf("sign final fail\n");
-    }
+        return 0;
 
     printf("-----\nsignature %zd \n", sig_len);
     for (int i = 0; i < sig_len; ++i)
@@ -455,6 +432,8 @@ test_signing()
     EVP_PKEY_CTX_free(ctx_sign_sta);
     EVP_MD_CTX_destroy(evp_md_ctx);
     OPENSSL_free(sig);
+
+    return (pass) ? 0 : 1;
 }
 
 void
