@@ -820,21 +820,13 @@ evp_sm2_verify(EVP_PKEY_CTX *ctx,
     unsigned char bin_r[SM3_DIGEST_LENGTH];
     unsigned char bin_s[SM3_DIGEST_LENGTH];
 
-    BN_CTX *bn_ctx;
     BIGNUM *r, *s;
 
     memcpy(bin_r, bin_sig, SM3_DIGEST_LENGTH);
     memcpy(bin_s, bin_sig + SM3_DIGEST_LENGTH, SM3_DIGEST_LENGTH);
 
-    if (NULL == (bn_ctx = BN_CTX_new()))
-    {
-        CCSerr(CCS_F_ECDSA_DO_VERIFY, CCS_R_MALLOC_ERROR);
-        goto err;
-    }
-
-    BN_CTX_start(bn_ctx);
-    r = BN_CTX_get(bn_ctx);
-    s = BN_CTX_get(bn_ctx);
+    r = BN_new();
+    s = BN_new();
 
     if (s == NULL)
     {
@@ -878,12 +870,5 @@ evp_sm2_verify(EVP_PKEY_CTX *ctx,
     {
         DSA_SIG_free(sig);
     }
-
-    if (bn_ctx)
-    {
-        BN_CTX_end(bn_ctx);
-        BN_CTX_free(bn_ctx);
-    }
-
     return ok;
 }

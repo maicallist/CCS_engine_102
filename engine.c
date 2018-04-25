@@ -22,9 +22,14 @@
 #include "err/ccs_err.h"
 #include "md/md_lcl.h"
 #include "conf/objects.h"
+#include "pkey/pkey_lcl.h"
+#include "pkey/ec_param.h"
 
 static const char *engine_id = "ccs";
 static const char *engine_name = "ccs_engine";
+
+static EVP_PKEY_METHOD *sm2_pmeth = NULL;
+static EVP_PKEY_ASN1_METHOD *sm2_ameth = NULL;
 
 static int
 ccs_engine_init(ENGINE *e)
@@ -67,6 +72,52 @@ ccs_digest_selector(ENGINE *e, const EVP_MD **digest, const int **nids, int nid)
 }
 
 static int
+evp_sm2_pkey_selector(ENGINE *e,
+                      EVP_PKEY_METHOD **pmeth,
+                      const int **nids,
+                      int nid)
+{
+    if (!pmeth)
+    {
+        *nids = &ccs_pkey_ids;
+        return 3; /* three available */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        *pmeth = sm2_pmeth;
+        return 1;
+    }
+
+    CCSerr(CCS_F_PKEY_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *pmeth = NULL;
+    return 0;
+}
+
+static int
+evp_sm2_asn1_selector(ENGINE *e,
+                      EVP_PKEY_ASN1_METHOD **ameth,
+                      const int **nids,
+                      int nid)
+{
+    if (!ameth)
+    {
+        *nids = &ccs_pkey_ids;
+        return 1; /* one available */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        *ameth = sm2_ameth;
+        return 1;
+    }
+
+    CCSerr(CCS_F_ASN1_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *ameth = NULL;
+    return 0;
+}
+
+static int
 bind(ENGINE *e, const char *d)
 {
     if (!ENGINE_set_id(e, engine_id)
@@ -82,6 +133,34 @@ bind(ENGINE *e, const char *d)
 
     if (!ENGINE_set_digests(e, ccs_digest_selector))
         return 0;
+
+    ec_param_fp_t *param = ec_param_fp_set;
+    nid = OBJ_create(OID_gost_cc_curve, SN_gost_cc_curve, LN_gost_cc_curve);
+    param++->nid = nid;
+
+    nid = OBJ_create(OID_sm2_test_curve, SN_sm2_test_curve, LN_sm2_test_curve);
+    param++->nid = nid;
+
+    nid = OBJ_create(OID_sm2_param_def, SN_sm2_param_def, LN_sm2_param_def);
+    param->nid = nid;
+
+    nid = OBJ_create(OID_sm2, SN_sm2, LN_sm2);
+    ccs_pkey_ids = nid;
+
+    evp_sm2_register_pmeth(nid, &sm2_pmeth, 0);
+    evp_sm2_register_ameth(nid, &sm2_ameth, "SM2 AMETH", "SM2 ASN METHOD");
+    if (!ENGINE_set_pkey_meths(e, evp_sm2_pkey_selector))
+    {
+        printf("Unable to set pkey functions.\n");
+        return 0;
+    }
+
+    if (!ENGINE_set_pkey_asn1_meths(e, evp_sm2_asn1_selector))
+    {
+        printf("Unable to set asn1 functions.\n");
+        return 0;
+    }
+
 
     ERR_load_CCS_strings();
 

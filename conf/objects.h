@@ -36,7 +36,7 @@
  * this standard is a total chaos, I find two sets of 256 bit curve
  * parameter, none of them has identification or anything.
  */
-#define OID_sm2_curve       "1.2.156.10197.301.9"
+#define OID_sm2_test_curve       "1.2.156.10197.301.9"
 #define LN_sm2_test_curve   "sm2_test_curve"
 #define SN_sm2_test_curve   "sm2_test_curve"
 

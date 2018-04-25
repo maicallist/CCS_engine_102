@@ -79,6 +79,7 @@ void ERR_load_CCS_strings(void);
 
 /* Function codes. */
 # define CCS_F_ASN1_REGISTRATION                          102
+# define CCS_F_ASN1_SELECT                                114
 # define CCS_F_ECDH_DERIVE                                103
 # define CCS_F_ECDSA_DO_SIGN                              104
 # define CCS_F_ECDSA_DO_VERIFY                            105
@@ -91,6 +92,7 @@ void ERR_load_CCS_strings(void);
 # define CCS_F_MD_SELECT                                  101
 # define CCS_F_PKEY_CTX_INIT                              112
 # define CCS_F_PKEY_REGISTRATION                          113
+# define CCS_F_PKEY_SELECT                                115
 # define CCS_F_RESERVED                                   100
 
 /* Reason codes. */
