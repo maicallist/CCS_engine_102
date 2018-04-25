@@ -544,6 +544,23 @@ evp_sm2_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2)
 static int
 evp_sm2_ctrl_str(EVP_PKEY_CTX *ctx, const char *type, const char *value)
 {
+    pkey_ctx_t *pctx = EVP_PKEY_CTX_get_data(ctx);
+    if (!pctx)
+        return 0;
+
+    if (!strcmp(type, EVP_PKEY_SET_PEER_KEY))
+        pctx->static_peer_pub = (EVP_PKEY *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_MY_KEY))
+        pctx->static_my_key = (EVP_PKEY *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_ZA))
+        pctx->za = (uint8_t *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_ZB))
+        pctx->zb = (uint8_t *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_CURVE_BY_SN))
+        pctx->curve_id = OBJ_sn2nid(value);
+    else
+        return 0;
+
     return 1;
 }
 
