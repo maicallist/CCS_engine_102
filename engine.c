@@ -73,9 +73,9 @@ ccs_digest_selector(ENGINE *e, const EVP_MD **digest, const int **nids, int nid)
 
 static int
 ccs_pkey_selector(ENGINE *e,
-                      EVP_PKEY_METHOD **pmeth,
-                      const int **nids,
-                      int nid)
+                  EVP_PKEY_METHOD **pmeth,
+                  const int **nids,
+                  int nid)
 {
     if (!pmeth)
     {
@@ -96,9 +96,9 @@ ccs_pkey_selector(ENGINE *e,
 
 static int
 ccs_asn1_selector(ENGINE *e,
-                      EVP_PKEY_ASN1_METHOD **ameth,
-                      const int **nids,
-                      int nid)
+                  EVP_PKEY_ASN1_METHOD **ameth,
+                  const int **nids,
+                  int nid)
 {
     if (!ameth)
     {

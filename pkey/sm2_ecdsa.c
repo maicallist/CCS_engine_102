@@ -52,9 +52,6 @@ sm2_do_sign(DSA_SIG *dsa_sig,
     r = BN_CTX_get(bn_ctx);
     order = BN_CTX_get(bn_ctx);
     tmp = BN_CTX_get(bn_ctx);
-    kpriv = BN_CTX_get(bn_ctx);
-    dA = BN_CTX_get(bn_ctx);
-    //inv = BN_CTX_get(bn_ctx);
 
     //FIXME malloc check
 
