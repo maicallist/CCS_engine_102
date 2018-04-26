@@ -25,7 +25,7 @@
 #include "cipher_ctx.h"
 #include "mode_gcm.h"
 
-static int sm4_cipher_ids = {NID_undef};
+static int ccs_cipher_ids = {NID_undef};
 
 int
 evp_sm4_gcm_init(EVP_CIPHER_CTX *ctx,
@@ -51,22 +51,10 @@ evp_sm4_gcm_get_asn1_param(EVP_CIPHER_CTX *ctx, ASN1_TYPE *type);
 int
 evp_sm4_gcm_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr);
 
-static EVP_CIPHER evp_sm4_gcm_method =
-    {
-        NID_undef,
-        1,              // allow us escape from EVP_EncryptFinal_ex()
-        16,
-        12,
-        EVP_CIPH_GCM_MODE | EVP_CIPH_NO_PADDING | EVP_CIPH_CUSTOM_IV
-            | EVP_CIPH_ALWAYS_CALL_INIT | EVP_CIPH_FLAG_CUSTOM_CIPHER,
-        evp_sm4_gcm_init,
-        evp_sm4_gcm_do_gcm,
-        evp_sm4_gcm_cleanup,
-        sizeof(cipher_ctx_t),
-        evp_sm4_gcm_set_asn1_param,
-        evp_sm4_gcm_get_asn1_param,
-        evp_sm4_gcm_ctrl,
-        NULL
-    };
+EVP_CIPHER *
+EVP_sm4_128_gcm();
+
+void
+evp_cipher_set_nid(int nid);
 
 #endif //CCS_ENGINE_CIPHER_LCL_H

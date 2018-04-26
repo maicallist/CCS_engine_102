@@ -22,6 +22,37 @@
 #include "cipher_lcl.h"
 #include "../err/ccs_err.h"
 
+static EVP_CIPHER evp_cipher_sm4_128_gcm =
+    {
+        NID_undef,
+        1,              // allow us escape from EVP_EncryptFinal_ex()
+        16,
+        12,
+        EVP_CIPH_GCM_MODE | EVP_CIPH_NO_PADDING | EVP_CIPH_CUSTOM_IV
+            | EVP_CIPH_ALWAYS_CALL_INIT | EVP_CIPH_FLAG_CUSTOM_CIPHER,
+        evp_sm4_gcm_init,
+        evp_sm4_gcm_do_gcm,
+        evp_sm4_gcm_cleanup,
+        sizeof(cipher_ctx_t),
+        evp_sm4_gcm_set_asn1_param,
+        evp_sm4_gcm_get_asn1_param,
+        evp_sm4_gcm_ctrl,
+        NULL
+    };
+
+EVP_CIPHER *
+EVP_sm4_128_gcm()
+{
+    return &evp_cipher_sm4_128_gcm;
+}
+
+void
+evp_cipher_set_nid(int nid)
+{
+    evp_cipher_sm4_128_gcm.nid = nid;
+    ccs_cipher_ids = nid;
+}
+
 int
 evp_sm4_gcm_init(EVP_CIPHER_CTX *ctx,
                  const unsigned char *key,
@@ -200,8 +231,7 @@ evp_sm4_gcm_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
             memcpy(ptr, ctx->buf, (size_t) arg);
             return 1;
 
-        default:
-            CCSerr(CCS_F_CIPHER_CTRL, CCS_R_INVALID_OPERATION);
+        default:CCSerr(CCS_F_CIPHER_CTRL, CCS_R_INVALID_OPERATION);
             return 0;
     }
 }

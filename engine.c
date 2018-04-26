@@ -24,6 +24,7 @@
 #include "conf/objects.h"
 #include "pkey/pkey_lcl.h"
 #include "pkey/ec_param.h"
+#include "cipher/cipher_lcl.h"
 
 static const char *engine_id = "ccs";
 static const char *engine_name = "ccs_engine";
@@ -118,6 +119,29 @@ ccs_asn1_selector(ENGINE *e,
 }
 
 static int
+ccs_cipher_selector(ENGINE *e,
+                    const EVP_CIPHER **cipher,
+                    const int **nids,
+                    int nid)
+{
+    if (!cipher)
+    {
+        *nids = &ccs_cipher_ids;
+        return 1; /* one algorithm supported */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm4_gcm))
+    {
+        *cipher = EVP_sm4_128_gcm();
+        return 1;
+    }
+
+    CCSerr(CCS_F_CIPHER_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *cipher = NULL;
+    return 0;
+}
+
+static int
 bind(ENGINE *e, const char *d)
 {
     if (!ENGINE_set_id(e, engine_id)
@@ -146,9 +170,15 @@ bind(ENGINE *e, const char *d)
 
     evp_sm2_register_pmeth(nid, &sm2_pmeth, 0);
     evp_sm2_register_ameth(nid, &sm2_ameth, "", "");
+
+    nid = OBJ_create(OID_sm4_gcm, SN_sm4_gcm, LN_sm4_gcm);
+    evp_cipher_set_nid(nid);
+    EVP_add_cipher(EVP_sm4_128_gcm());
+
     if (!ENGINE_set_digests(e, ccs_digest_selector)
         || !ENGINE_set_pkey_meths(e, ccs_pkey_selector)
-        || !ENGINE_set_pkey_asn1_meths(e, ccs_asn1_selector))
+        || !ENGINE_set_pkey_asn1_meths(e, ccs_asn1_selector)
+        || !ENGINE_set_ciphers(e, ccs_cipher_selector))
         return 0;
 
     ERR_load_CCS_strings();

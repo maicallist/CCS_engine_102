@@ -82,6 +82,7 @@ void ERR_load_CCS_strings(void);
 # define CCS_F_ASN1_SELECT                                114
 # define CCS_F_CIPHER_CTRL                                116
 # define CCS_F_CIPHER_INIT                                117
+# define CCS_F_CIPHER_SELECT                              119
 # define CCS_F_DO_CIPHER                                  118
 # define CCS_F_ECDH_DERIVE                                103
 # define CCS_F_ECDSA_DO_SIGN                              104

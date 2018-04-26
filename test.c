@@ -45,6 +45,21 @@ test_asym_enc();
 int
 test_asym_dec();
 
+int
+test_cipher_enc1();
+int
+test_cipher_enc2();
+int
+test_cipher_enc3();
+int
+test_cipher_enc4();
+int
+test_cipher_enc5();
+int
+test_cipher_enc6();
+int
+test_cipher_enc7();
+
 void
 engine_cleanup();
 
@@ -69,6 +84,14 @@ main()
     CASE += test_verify();
     CASE += test_asym_enc();
     CASE += test_asym_dec();
+
+    CASE += test_cipher_enc1();
+    CASE += test_cipher_enc2();
+    CASE += test_cipher_enc3();
+    CASE += test_cipher_enc4();
+    CASE += test_cipher_enc5();
+    CASE += test_cipher_enc6();
+    CASE += test_cipher_enc7();
 
     engine_cleanup();
 
@@ -673,6 +696,526 @@ test_asym_dec()
     }
 
     return (pass) ? 0 : 1;
+}
+
+int
+test_cipher_enc1()
+{
+    uint8_t k1[16];
+    memset(k1, 0, 16);
+
+    uint8_t v1[12];
+    memset(v1, 0, 12);
+
+    uint8_t t1[16];
+    memset(t1, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k1, v1))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, NULL, 0))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, NULL, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t1))
+        return 0;
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t1[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 1\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc2()
+{
+    uint8_t k2[16];
+    memset(k2, 0, 16);
+
+    uint8_t iv2[12];
+    memset(iv2, 0, 16);
+
+    uint8_t p2[16];
+    memset(p2, 0, 16);
+
+    uint8_t c2[16];
+    memset(c2, 0, 16);
+
+    uint8_t t2[16];
+    memset(t2, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k2, iv2))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c2, &len, p2, sizeof(p2)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c2 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t2))
+        return 0;
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", c2[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t2[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 2\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc3()
+{
+    uint8_t k3[16] =
+        {0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c, 0x6d, 0x6a, 0x8f, 0x94,
+            0x67, 0x30, 0x83, 0x08};
+    uint8_t iv3[12] =
+        {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad, 0xde, 0xca, 0xf8,
+            0x88};
+    uint8_t p3[64] =
+        {0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5, 0xa5, 0x59, 0x09, 0xc5,
+            0xaf, 0xf5, 0x26, 0x9a, 0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7,
+            0xda, 0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72, 0x1c, 0x3c,
+            0x0c, 0x95, 0x95, 0x68, 0x09, 0x53, 0x2f, 0xcf, 0x0e, 0x24, 0x49,
+            0xa6, 0xb5, 0x25, 0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+            0xba, 0x63, 0x7b, 0x39, 0x1a, 0xaf, 0xd2, 0x55};
+
+    uint8_t c3[64];
+    memset(c3, 0, 64);
+
+    uint8_t t3[16];
+    memset(t3, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k3, iv3))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c3, &len, p3, sizeof(p3)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c3 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t3))
+        return 0;
+
+    for (int i = 0; i < 64; ++i)
+        printf("%02x", c3[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t3[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 3\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc4()
+{
+    uint8_t k4[16] =
+        {0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c, 0x6d, 0x6a, 0x8f, 0x94,
+            0x67, 0x30, 0x83, 0x08};
+    uint8_t iv4[12] =
+        {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad, 0xde, 0xca, 0xf8,
+            0x88};
+    uint8_t p4[60] =
+        {0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5, 0xa5, 0x59, 0x09, 0xc5,
+            0xaf, 0xf5, 0x26, 0x9a, 0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7,
+            0xda, 0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72, 0x1c, 0x3c,
+            0x0c, 0x95, 0x95, 0x68, 0x09, 0x53, 0x2f, 0xcf, 0x0e, 0x24, 0x49,
+            0xa6, 0xb5, 0x25, 0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+            0xba, 0x63, 0x7b, 0x39};
+    uint8_t a4[20] =
+        {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed, 0xfa, 0xce,
+            0xde, 0xad, 0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
+
+    uint8_t c4[60];
+    memset(c4, 0, 60);
+
+    uint8_t t4[16];
+    memset(t4, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k4, iv4))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, a4, sizeof(a4)))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c4, &len, p4, sizeof(p4)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c4 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t4))
+        return 0;
+
+    for (int i = 0; i < 60; ++i)
+        printf("%02x", c4[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t4[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 4\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc5()
+{
+    uint8_t k5[16] =
+        {0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c, 0x6d, 0x6a, 0x8f, 0x94,
+            0x67, 0x30, 0x83, 0x08};
+    uint8_t iv5[8] = {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce, 0xdb, 0xad};
+    uint8_t p5[60] =
+        {0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5, 0xa5, 0x59, 0x09, 0xc5,
+            0xaf, 0xf5, 0x26, 0x9a, 0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7,
+            0xda, 0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72, 0x1c, 0x3c,
+            0x0c, 0x95, 0x95, 0x68, 0x09, 0x53, 0x2f, 0xcf, 0x0e, 0x24, 0x49,
+            0xa6, 0xb5, 0x25, 0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+            0xba, 0x63, 0x7b, 0x39};
+    uint8_t a5[20] =
+        {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed, 0xfa, 0xce,
+            0xde, 0xad, 0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
+
+    uint8_t c5[60];
+    memset(c5, 0, 60);
+
+    uint8_t t5[16];
+    memset(t5, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 8, NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k5, iv5))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, a5, sizeof(a5)))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c5, &len, p5, sizeof(p5)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c5 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t5))
+        return 0;
+
+    for (int i = 0; i < 60; ++i)
+        printf("%02x", c5[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t5[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 5\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc6()
+{
+    uint8_t k6[] =
+        {0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c, 0x6d, 0x6a, 0x8f, 0x94,
+            0x67, 0x30, 0x83, 0x08};
+    uint8_t iv6[60] =
+        {0x93, 0x13, 0x22, 0x5d, 0xf8, 0x84, 0x06, 0xe5, 0x55, 0x90, 0x9c, 0x5a,
+            0xff, 0x52, 0x69, 0xaa, 0x6a, 0x7a, 0x95, 0x38, 0x53, 0x4f, 0x7d,
+            0xa1, 0xe4, 0xc3, 0x03, 0xd2, 0xa3, 0x18, 0xa7, 0x28, 0xc3, 0xc0,
+            0xc9, 0x51, 0x56, 0x80, 0x95, 0x39, 0xfc, 0xf0, 0xe2, 0x42, 0x9a,
+            0x6b, 0x52, 0x54, 0x16, 0xae, 0xdb, 0xf5, 0xa0, 0xde, 0x6a, 0x57,
+            0xa6, 0x37, 0xb3, 0x9b};
+    uint8_t p6[60] =
+        {0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5, 0xa5, 0x59, 0x09, 0xc5,
+            0xaf, 0xf5, 0x26, 0x9a, 0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7,
+            0xda, 0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72, 0x1c, 0x3c,
+            0x0c, 0x95, 0x95, 0x68, 0x09, 0x53, 0x2f, 0xcf, 0x0e, 0x24, 0x49,
+            0xa6, 0xb5, 0x25, 0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+            0xba, 0x63, 0x7b, 0x39};
+    uint8_t a6[20] =
+        {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed, 0xfa, 0xce,
+            0xde, 0xad, 0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
+
+    uint8_t c6[60];
+    memset(c6, 0, 60);
+
+    uint8_t t6[16];
+    memset(t6, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 60, NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k6, iv6))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, a6, sizeof(a6)))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c6, &len, p6, sizeof(p6)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c6 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t6))
+        return 0;
+
+    for (int i = 0; i < 60; ++i)
+        printf("%02x", c6[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t6[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+    printf("cipher enc 6\n");
+    PASS;
+    return 1;
+}
+
+int
+test_cipher_enc7()
+{
+    uint8_t k7[] =
+        {0xfe, 0xff, 0xe9, 0x92, 0x86, 0x65, 0x73, 0x1c, 0x6d, 0x6a, 0x8f, 0x94,
+            0x67, 0x30, 0x83, 0x08};
+    uint8_t iv7[60] =
+        {0x93, 0x13, 0x22, 0x5d, 0xf8, 0x84, 0x06, 0xe5, 0x55, 0x90, 0x9c, 0x5a,
+            0xff, 0x52, 0x69, 0xaa, 0x6a, 0x7a, 0x95, 0x38, 0x53, 0x4f, 0x7d,
+            0xa1, 0xe4, 0xc3, 0x03, 0xd2, 0xa3, 0x18, 0xa7, 0x28, 0xc3, 0xc0,
+            0xc9, 0x51, 0x56, 0x80, 0x95, 0x39, 0xfc, 0xf0, 0xe2, 0x42, 0x9a,
+            0x6b, 0x52, 0x54, 0x16, 0xae, 0xdb, 0xf5, 0xa0, 0xde, 0x6a, 0x57,
+            0xa6, 0x37, 0xb3, 0x9b};
+    uint8_t p71[16] =
+        {0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5, 0xa5, 0x59, 0x09, 0xc5,
+            0xaf, 0xf5, 0x26, 0x9a};
+    uint8_t p72[16] =
+        {0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda, 0x2e, 0x4c, 0x30, 0x3d,
+            0x8a, 0x31, 0x8a, 0x72};
+    uint8_t p73[28] =
+        {0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53, 0x2f, 0xcf, 0x0e, 0x24,
+            0x49, 0xa6, 0xb5, 0x25, 0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6,
+            0x57, 0xba, 0x63, 0x7b, 0x39};
+
+    uint8_t a71[10] =
+        {0xfe, 0xed, 0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed};
+    uint8_t
+        a72[10] = {0xfa, 0xce, 0xde, 0xad, 0xbe, 0xef, 0xab, 0xad, 0xda, 0xd2};
+
+    uint8_t c7[60];
+    memset(c7, 0, 60);
+
+    uint8_t t7[16];
+    memset(t7, 0, 16);
+
+    EVP_CIPHER_CTX *ctx;
+
+    int len;
+
+    int ciphertext_len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx,
+                                EVP_get_cipherbynid(OBJ_sn2nid(SN_sm4_gcm)),
+                                engine,
+                                NULL,
+                                NULL))
+        return 0;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 60, NULL))
+        return 0;
+
+    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, k7, iv7))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, a71, sizeof(a71)))
+        return 0;
+    if (1 != EVP_EncryptUpdate(ctx, NULL, &len, a72, sizeof(a72)))
+        return 0;
+
+    if (1 != EVP_EncryptUpdate(ctx, c7, &len, p71, sizeof(p71)))
+        return 0;
+    ciphertext_len = len;
+
+    if (1
+        != EVP_EncryptUpdate(ctx, c7 + ciphertext_len, &len, p72, sizeof(p72)))
+        return 0;
+    ciphertext_len += len;
+
+    if (1
+        != EVP_EncryptUpdate(ctx, c7 + ciphertext_len, &len, p73, sizeof(p73)))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, c7 + len, &len))
+        return 0;
+    ciphertext_len += len;
+
+    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, t7))
+        return 0;
+
+    for (int i = 0; i < 60; ++i)
+        printf("%02x", c7[i]);
+    printf("\n");
+
+    for (int i = 0; i < 16; ++i)
+        printf("%02x", t7[i]);
+    printf("\n");
+
+    printf("cipher length is %d.\n\n", ciphertext_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    printf("cipher enc 7\n");
+    PASS;
+    return 1;
 }
 
 void
