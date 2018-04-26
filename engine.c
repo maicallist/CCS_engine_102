@@ -72,7 +72,7 @@ ccs_digest_selector(ENGINE *e, const EVP_MD **digest, const int **nids, int nid)
 }
 
 static int
-evp_sm2_pkey_selector(ENGINE *e,
+ccs_pkey_selector(ENGINE *e,
                       EVP_PKEY_METHOD **pmeth,
                       const int **nids,
                       int nid)
@@ -95,7 +95,7 @@ evp_sm2_pkey_selector(ENGINE *e,
 }
 
 static int
-evp_sm2_asn1_selector(ENGINE *e,
+ccs_asn1_selector(ENGINE *e,
                       EVP_PKEY_ASN1_METHOD **ameth,
                       const int **nids,
                       int nid)
@@ -131,9 +131,6 @@ bind(ENGINE *e, const char *d)
     evp_md_sm3_set_nid(nid);
     EVP_add_digest(EVP_sm3());
 
-    if (!ENGINE_set_digests(e, ccs_digest_selector))
-        return 0;
-
     ec_param_fp_t *param = ec_param_fp_set;
     nid = OBJ_create(OID_gost_cc_curve, SN_gost_cc_curve, LN_gost_cc_curve);
     param++->nid = nid;
@@ -148,19 +145,11 @@ bind(ENGINE *e, const char *d)
     ccs_pkey_ids = nid;
 
     evp_sm2_register_pmeth(nid, &sm2_pmeth, 0);
-    evp_sm2_register_ameth(nid, &sm2_ameth, "SM2 AMETH", "SM2 ASN METHOD");
-    if (!ENGINE_set_pkey_meths(e, evp_sm2_pkey_selector))
-    {
-        printf("Unable to set pkey functions.\n");
+    evp_sm2_register_ameth(nid, &sm2_ameth, "", "");
+    if (!ENGINE_set_digests(e, ccs_digest_selector)
+        || !ENGINE_set_pkey_meths(e, ccs_pkey_selector)
+        || !ENGINE_set_pkey_asn1_meths(e, ccs_asn1_selector))
         return 0;
-    }
-
-    if (!ENGINE_set_pkey_asn1_meths(e, evp_sm2_asn1_selector))
-    {
-        printf("Unable to set asn1 functions.\n");
-        return 0;
-    }
-
 
     ERR_load_CCS_strings();
 
