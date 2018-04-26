@@ -16,7 +16,18 @@ DEP_enc		= bin/ecies.o
 DEP_kdf		= bin/kdf.o
 DEP_ameth	= bin/ameth.o
 DEP_pmeth	= bin/pmeth.o
+DEP_pack_cipehr = bin/cipher.o
+DEP_ciph_link 	= bin/cipher_lcl.o
+DEP_ciph_ctx	= bin/cipher_ctx.o
+DEP_conv	= bin/conv.o
+DEP_gcm		= bin/gcm.o
+DEP_sm4		= bin/sm4.o
 
+SRC_sm4		= cipher/sm4_cipher.c
+SRC_gcm		= cipher/mode_gcm.c
+SRC_conv	= cipher/converter.c
+SRC_ciph_ctx	= cipher/cipher_ctx.c
+SRC_ciph_link	= cipher/cipher_lcl.c
 SRC_pmeth	= pkey/sm2_pmeth.c
 SRC_ameth	= pkey/sm2_ameth.c
 SRC_kdf		= pkey/sm2_kdf.c
@@ -39,13 +50,31 @@ dir :
 $(LIB) : $(DEP_pack)
 	$(CC) -shared -o $@ $<
 
-$(DEP_pack) : $(DEP_engine) $(DEP_err) $(DEP_pack_md) $(DEP_pack_pkey)
+$(DEP_pack) : $(DEP_engine) $(DEP_err) $(DEP_pack_md) $(DEP_pack_pkey) $(DEP_pack_cipher)
 	ld -r -o $@ $?
 
 $(DEP_engine) : $(SRC_engine)
 	$(CC) $(FLAG_dep) -o $@ -c $<
 
 $(DEP_err) : $(SRC_err)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_pack_cipher) : $(DEP_ciph_ctx) $(DEP_conv) $(DEP_gcm) $(DEP_sm4) $(DEP_ciph_link)
+	ld -r -o $@ $?
+
+$(DEP_ciph_link) : $(SRC_ciph_link)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_ciph_ctx) : $(SRC_ciph_ctx)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_conv) : $(SRC_conv)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_sm4) : $(SRC_sm4)
+	$(CC) $(FLAG_dep) -o $@ -c $<
+
+$(DEP_gcm) : $(SRC_gcm)
 	$(CC) $(FLAG_dep) -o $@ -c $<
 
 $(DEP_pack_pkey) : $(DEP_ameth) $(DEP_pmeth) $(DEP_kdf) $(DEP_enc) $(DEP_ecdsa) $(DEP_ecdh) $(DEP_param)
