@@ -80,6 +80,9 @@ void ERR_load_CCS_strings(void);
 /* Function codes. */
 # define CCS_F_ASN1_REGISTRATION                          102
 # define CCS_F_ASN1_SELECT                                114
+# define CCS_F_CIPHER_CTRL                                116
+# define CCS_F_CIPHER_INIT                                117
+# define CCS_F_DO_CIPHER                                  118
 # define CCS_F_ECDH_DERIVE                                103
 # define CCS_F_ECDSA_DO_SIGN                              104
 # define CCS_F_ECDSA_DO_VERIFY                            105
@@ -99,6 +102,7 @@ void ERR_load_CCS_strings(void);
 # define CCS_R_ARITHMETIC_ERROR                           103
 # define CCS_R_BN_ERROR                                   104
 # define CCS_R_EC_PARAMETER_ERROR                         105
+# define CCS_R_INVALID_OPERATION                          110
 # define CCS_R_MALLOC_ERROR                               102
 # define CCS_R_NULL_REFERENCE                             106
 # define CCS_R_PARAMETER_ERROR                            107

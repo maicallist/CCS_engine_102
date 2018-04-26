@@ -18,7 +18,9 @@
  * along with ccs_engine.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <openssl/err.h>
 #include "cipher_lcl.h"
+#include "../err/ccs_err.h"
 
 int
 evp_sm4_gcm_init(EVP_CIPHER_CTX *ctx,
@@ -27,7 +29,10 @@ evp_sm4_gcm_init(EVP_CIPHER_CTX *ctx,
                  int enc)
 {
     if (!ctx)
+    {
+        CCSerr(CCS_F_CIPHER_INIT, CCS_R_NULL_REFERENCE);
         return 0;
+    }
 
     cipher_ctx_t *gctx = ctx->cipher_data;
 
@@ -72,7 +77,10 @@ evp_sm4_gcm_do_gcm(EVP_CIPHER_CTX *ctx,
                    size_t inl)
 {
     if (!ctx)
+    {
+        CCSerr(CCS_F_DO_CIPHER, CCS_R_NULL_REFERENCE);
         return 0;
+    }
 
     if (!in && !out)
         return 0;
@@ -118,7 +126,7 @@ evp_sm4_gcm_do_gcm(EVP_CIPHER_CTX *ctx,
                                       gctx->cfx,
                                       gctx->len_cfx,
                                       ctx->oiv);
-
+    CCSerr(CCS_F_DO_CIPHER, CCS_R_INVALID_OPERATION);
     return 0;
 }
 
@@ -145,7 +153,10 @@ int
 evp_sm4_gcm_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
 {
     if (!ctx)
+    {
+        CCSerr(CCS_F_CIPHER_CTRL, CCS_R_NULL_REFERENCE);
         return 0;
+    }
 
     cipher_ctx_t *gctx = ctx->cipher_data;
 
@@ -189,6 +200,8 @@ evp_sm4_gcm_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
             memcpy(ptr, ctx->buf, (size_t) arg);
             return 1;
 
-        default:return 0;
+        default:
+            CCSerr(CCS_F_CIPHER_CTRL, CCS_R_INVALID_OPERATION);
+            return 0;
     }
 }
