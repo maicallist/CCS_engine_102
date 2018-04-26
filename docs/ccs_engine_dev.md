@@ -24,8 +24,9 @@
     * [Make Your Life Easier]   (#make_life)
     * [GOST Engine]             (#ccgost)
     * [SM2 ECDH]                (#sm2_ecdh)
-* [Completing Public key]           (#pkey)
+* [Completing Public key]       (#pkey)
 * [Cipher]                      (#cipher)
+* [Journey Ends Here]           (#bye)
 
 ## <a name = "disclaimer"></a> Disclaimer
 
@@ -1776,3 +1777,23 @@ We left ASN.1 part, if you ever need them, feel free to do them yourself.
 
 Update error code, Makefile, check with valgrind.
 
+## <a name="cipher"></a> Cipher
+
+With the experience of inserting message digest algorithm, there is no any trouble for us to insert a new cipher.
+
+Work with `EVP_CIPHER` and `EVP_CIPHER_CTX` and do the same as digest section.
+
+**Note**  
+In Source code, we defines our `GCM` operation mode, if you gonna need some fancy modes, do it similar to what's in the source code. However, if you only need normal modes (eg. cbc128, ctr128, gcm128, xts128), have a look at openssl/crypto/modes.h, they are already provided. 
+
+As for how to use provided modes, consult other ciphers in OpenSSL(eg. openssl/crypto/camellia/cmll_ctr.c).
+
+## <a name="bye"></a> Journey Ends Here
+
+Although we only inserted few example algorithm, with little effort, you can load any algorithm like ring signature or threshold cryptosystem.
+
+Again, I'm not good at this, neither OpenSSL nor C.  
+Gather useful information from here and ***Do it yourself***.
+
+PS.  
+Don't forget to fix that static err lib code. 
