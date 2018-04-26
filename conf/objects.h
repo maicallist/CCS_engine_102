@@ -36,7 +36,7 @@
  * this standard is a total chaos, I find two sets of 256 bit curve
  * parameter, none of them has identification or anything.
  */
-#define OID_sm2_curve       "1.2.156.10197.301.9"
+#define OID_sm2_test_curve  "1.2.156.10197.301.9"
 #define LN_sm2_test_curve   "sm2_test_curve"
 #define SN_sm2_test_curve   "sm2_test_curve"
 
@@ -47,5 +47,11 @@
 #define OID_gost_cc_curve   "2.16.156.7.23.3.76"
 #define LN_gost_cc_curve    "gost_cc_r34.10_2001_curve"
 #define SN_gost_cc_curve    "gost_cc_curve"
+
+#define EVP_PKEY_SET_PEER_KEY       "evp-pkey-set-peer-key"
+#define EVP_PKEY_SET_MY_KEY         "evp-pkey-set-my-key"
+#define EVP_PKEY_SET_ZA             "evp-pkey-set-za"
+#define EVP_PKEY_SET_ZB             "evp-pkey-set-zb"
+#define EVP_PKEY_SET_CURVE_BY_SN    "evp-pkey-set-curve-id"
 
 #endif //CCS_ENGINE_OBJECT_H
