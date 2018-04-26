@@ -50,8 +50,8 @@
 
 #define EVP_PKEY_SET_PEER_KEY       "evp-pkey-set-peer-key"
 #define EVP_PKEY_SET_MY_KEY         "evp-pkey-set-my-key"
-#define EVP_PKEY_SET_ZA             "evp-pkey_set_za"
-#define EVP_PKEY_SET_ZB             "evp-pkey_set_zb"
+#define EVP_PKEY_SET_ZA             "evp-pkey-set-za"
+#define EVP_PKEY_SET_ZB             "evp-pkey-set-zb"
 #define EVP_PKEY_SET_CURVE_BY_SN    "evp-pkey-set-curve-id"
 
 #endif //CCS_ENGINE_OBJECT_H
