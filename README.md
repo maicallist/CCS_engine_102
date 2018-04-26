@@ -6,7 +6,7 @@ CCS_Engine is a demonstration project to show people **'How to create your own O
 
 CCS_Engine implements:
   
-* SM2 (ec based crypto system)
+* SM2 (ec based cryptosystem)
 * SM3 (message digest)
 * SM4 (feistel cipher) 
 
