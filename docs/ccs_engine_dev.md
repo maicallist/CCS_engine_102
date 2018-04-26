@@ -24,8 +24,7 @@
     * [Make Your Life Easier]   (#make_life)
     * [GOST Engine]             (#ccgost)
     * [SM2 ECDH]                (#sm2_ecdh)
-* [ECDSA]                       (#ecdsa)
-* [ECIES]                       (#ecies)
+* [Completing Public key]           (#pkey)
 * [Cipher]                      (#cipher)
 
 ## <a name = "disclaimer"></a> Disclaimer
@@ -40,6 +39,15 @@ But still you have reached to this tutorial, so I suppose you really need an alg
 
 The API is an important thing. I've seen some examples people claim that they made an engine. But the truth is, they just steal some code from OpenSSL library. Their algorithm cannot be access through **OpenSSL EVP interface**. If you don't know what EVP is, it's a high level api that hides all cryptographic details from users. It's a fool-proof api, or intends to be one. That's the goal you should aim for, hiding your custom algorithms behind OpenSSL EVP interface, so users won't make any stupid mistakes. They always do, no offense, we all do. Thus, exposing you low level error prone api would be a bad idea. 
 
+## <a name="goal"></a> Goal
+Through this tutorial, we are going to insert following algorithms
+
+* SM2 - EC based cryptosystem
+* SM3 - message digest
+* SM4 - feistel cipher
+
+*Note* all algorithms above are available from OpenSSL 1.1.1.  
+*Note* No algorithms above are optimized for performance.
 
 ## <a name="pre-checks"></a> Pre-Checks
 Probe an customized engine into OpenSSL is only allowed after version **0.9.7**.  
@@ -1045,3 +1053,726 @@ The message digest of "abc" should be
 And the message digest of "....", anyway, look for two green <font color=green>```test passed```</font> in md test section.
 
 Again, check with Valgrind.
+
+## <a name = "ecdh"></a> ECDH
+Since we have a working digest algorithm, we can move to the next step, creating a key exchange algorithm. SM2 key exchange algorithm is based on Elliptic curve, so we are going to work on OpenSSL ECDH. 
+
+### <a name = "make_life"></a> Make Your Life Easier 
+Inserting a public key algorithm is not as easy as message digest, it requires a lot of work. However, [OpenSSL wiki](https://wiki.openssl.org/index.php/Creating_an_OpenSSL_Engine_to_use_indigenous_ECDH_ECDSA_and_HASH_Algorithms#ECDH) shows us a work around.
+
+I'm not going to repeat what's in the wiki's ECDH section. The ***point*** is you access your ECDH method through either ```ECDH_compute_key()``` like the wiki does it, or my preferred way, through [EVP interface](https://wiki.openssl.org/index.php/Elliptic_Curve_Diffie_Hellman#Using_ECDH_in_OpenSSL) ```EVP_PKEY_derive()``` which calls ```ECDH_compute_key()```. The problem we have here is, the compute key function is defined in OpenSSL, if your key exchange algorithm fits the function signature, you can code it this way, save you a lot of time.
+
+```
+// function signatures
+ 
+int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
+
+int ECDH_compute_key(void *out, size_t outlen, const EC_POINT *pub_key,
+                     EC_KEY *ecdh, void *(*KDF) (const void *in, size_t inlen,
+                                                 void *out, size_t *outlen));
+```
+
+Unfortunately, SM2 doesn't fit in ```ECDH_compute_key()```. To complete SM2 key exchange process, the algorithm requires two key pairs from one party, and two public keys from the other party, as well as identification hash from both. We can do some dirty tricks by manipulating ```void *out``` parameter, but it gets ugly. 
+
+So, if your key exchange is a simple one, congratulations, have a look at the [OpenSSL wiki](https://wiki.openssl.org/index.php/Creating_an_OpenSSL_Engine_to_use_indigenous_ECDH_ECDSA_and_HASH_Algorithms#ECDH), finish your ECDH and skip to ECDSA section. ***Remember***, [EVP interface](https://wiki.openssl.org/index.php/Elliptic_Curve_Diffie_Hellman#Using_ECDH_in_OpenSSL)  is preferred.
+
+Otherwise, keep reading.
+
+### <a name = "ccgost"></a> GOST Engine
+
+Before we start, we have to take a detour and verify few details. To complete a public key system in OpenSSL, I recommend you have a look at Russian Gost Engine comes with OpenSSL bundle. You can find the source code [here](https://chromium.googlesource.com/chromium/deps/openssl/+/480da75abf485e7e2a6be5acc0f71842368792c0/openssl/engines/ccgost/README.gost).  
+
+In this section, we are going to explore gost source code. 
+
+In particularly, we are interested in   
+```gost_params.*``` defines elliptic curve parameters.  
+```gost2001.c```   defines key exchange setup.  
+```gost2001_keyx.c``` defines key exchange details.   
+```gost_pmeth.c``` and ```gost_ameth.c``` defines functions required by OpenSSL public key system.
+
+```gost_pmeth.c``` is the main file we need to consult with, you can see it defines a lot of functions, which are consistent with a struct called ```EVP_PKEY_METHOD```.
+This struct is defined in ```evp.locl.h``` in OpenSSL, and it's a long list.
+
+```
+struct evp_pkey_method_st {
+    int pkey_id;
+    int flags;
+    int (*init) (EVP_PKEY_CTX *ctx);
+    int (*copy) (EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src);
+    void (*cleanup) (EVP_PKEY_CTX *ctx);
+    int (*paramgen_init) (EVP_PKEY_CTX *ctx);
+    int (*paramgen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+    int (*keygen_init) (EVP_PKEY_CTX *ctx);
+    int (*keygen) (EVP_PKEY_CTX *ctx, EVP_PKEY *pkey);
+    int (*sign_init) (EVP_PKEY_CTX *ctx);
+    int (*sign) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
+                 const unsigned char *tbs, size_t tbslen);
+    int (*verify_init) (EVP_PKEY_CTX *ctx);
+    int (*verify) (EVP_PKEY_CTX *ctx,
+                   const unsigned char *sig, size_t siglen,
+                   const unsigned char *tbs, size_t tbslen);
+    int (*verify_recover_init) (EVP_PKEY_CTX *ctx);
+    int (*verify_recover) (EVP_PKEY_CTX *ctx,
+                           unsigned char *rout, size_t *routlen,
+                           const unsigned char *sig, size_t siglen);
+    int (*signctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
+    int (*signctx) (EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
+                    EVP_MD_CTX *mctx);
+    int (*verifyctx_init) (EVP_PKEY_CTX *ctx, EVP_MD_CTX *mctx);
+    int (*verifyctx) (EVP_PKEY_CTX *ctx, const unsigned char *sig, int siglen,
+                      EVP_MD_CTX *mctx);
+    int (*encrypt_init) (EVP_PKEY_CTX *ctx);
+    int (*encrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
+                    const unsigned char *in, size_t inlen);
+    int (*decrypt_init) (EVP_PKEY_CTX *ctx);
+    int (*decrypt) (EVP_PKEY_CTX *ctx, unsigned char *out, size_t *outlen,
+                    const unsigned char *in, size_t inlen);
+    int (*derive_init) (EVP_PKEY_CTX *ctx);
+    int (*derive) (EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
+    int (*ctrl) (EVP_PKEY_CTX *ctx, int type, int p1, void *p2);
+    int (*ctrl_str) (EVP_PKEY_CTX *ctx, const char *type, const char *value);
+} /* EVP_PKEY_METHOD */ ;
+
+``` 
+
+You can have good guesses based on the name of those function pointers. To complete ECDH part, we only need to care about **derive_init()** and **derive()**, for now.
+
+From following two code blocks, we can see how gost negotiate a key.
+```derive_init``` does absolutely nothing, ```derive``` retrieves two key pairs from ```EVP_PKEY_CTX```struct and subsequently calls ```VKO_compute_key```function to arrive at derived secret.
+
+```
+static int pkey_gost_derive_init(EVP_PKEY_CTX *ctx)
+{
+	return 1;
+}
+```
+
+```
+/*
+ * EVP_PKEY_METHOD callback derive. Implements VKO R 34.10-2001
+ * algorithm
+ */
+int pkey_gost2001_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen)
+{
+
+	## do some setup and retrieve two key pairs
+
+	if (key == NULL) {
+		*keylen = 32;
+		return 32;
+	}	
+	
+	*keylen=VKO_compute_key(key, 32, EC_KEY_get0_public_key(EVP_PKEY_get0(peer_key)),
+		(EC_KEY *)EVP_PKEY_get0(my_key),data->shared_ukm);
+	return 1;	
+}
+```
+
+```
+/* Implementation of CryptoPro VKO 34.10-2001 algorithm */
+static int VKO_compute_key(unsigned char *shared_key,size_t shared_key_size,const EC_POINT *pub_key,EC_KEY *priv_key,const unsigned char *ukm)
+{
+    ## calculating points on curve.
+    ## return 32 refers key length.
+	
+	return 32;
+}
+
+```
+
+Finally, after all functions are finished, we still need to notify OpenSSL by following function.
+
+```
+int register_pmeth_gost(int id, EVP_PKEY_METHOD **pmeth,int flags)
+	{
+	*pmeth = EVP_PKEY_meth_new(id, flags);
+	if (!*pmeth) return 0;
+
+	switch (id)
+		{
+		case NID_id_GostR3410_94:
+			don't care about other algorithm;
+			break;
+		case NID_id_GostR3410_2001:
+			EVP_PKEY_meth_set_ctrl(*pmeth,pkey_gost_ctrl, pkey_gost_ctrl01_str);
+			EVP_PKEY_meth_set_sign(*pmeth, NULL, pkey_gost01_cp_sign);
+			EVP_PKEY_meth_set_verify(*pmeth, NULL, pkey_gost01_cp_verify);
+
+			EVP_PKEY_meth_set_keygen(*pmeth, NULL, pkey_gost01cp_keygen);
+
+			EVP_PKEY_meth_set_encrypt(*pmeth,
+				pkey_gost_encrypt_init, pkey_GOST01cp_encrypt);
+			EVP_PKEY_meth_set_decrypt(*pmeth, NULL, pkey_GOST01cp_decrypt);
+			EVP_PKEY_meth_set_derive(*pmeth,
+				pkey_gost_derive_init, pkey_gost2001_derive);
+			EVP_PKEY_meth_set_paramgen(*pmeth, pkey_gost_paramgen_init,pkey_gost01_paramgen);	
+			break;
+		case NID_id_Gost28147_89_MAC:
+			don't care about other algorithm;
+		default: /*Unsupported method*/
+			return 0;
+		}
+	EVP_PKEY_meth_set_init(*pmeth, pkey_gost_init);
+	EVP_PKEY_meth_set_cleanup(*pmeth, pkey_gost_cleanup);
+
+	EVP_PKEY_meth_set_copy(*pmeth, pkey_gost_copy);
+	/*FIXME derive etc...*/
+	
+	return 1;
+	}
+
+```
+
+
+### <a name = "sm2_ecdh"></a> SM2 ECDH
+
+Buckle Up, this is gonna be a long ride.
+
+Similar to message digest, SM2 ECDH code is implemented in
+`sm2.h`, `sm2_ecdh.c` and `sm2_kdf.c`. Details are outside the scope of this note.
+
+All elliptic curve related parameters are stored in `sm2_param.*`.
+
+```
+// param.h
+
+typedef struct
+{
+    int nid;
+    char *a;
+    char *b;
+    char *gx;
+    char *gy;
+    char *p;        // prime
+    char *n;        // order
+    char *h;        // cofactor
+} ec_param_fp_t;
+
+extern ec_param_fp_t ec_param_fp_set[];
+```
+
+```
+// param.c
+
+ec_param_fp_t ec_param_fp_set [] =
+    {
+        /* gost R3410 2001 CC */
+        {
+            /* id */
+            NID_undef,
+            /* a */
+            "C0000000000000000000000000000000000000000000000000000000000003c4",
+            /* b */
+            "2d06B4265ebc749ff7d0f1f1f88232e81632e9088fd44b7787d5e407e955080c",
+            /* gx */
+            "2",
+            /* gy */
+            "a20e034bf8813ef5c18d01105e726a17eb248b264ae9706f440bedc8ccb6b22c",
+            /* p */
+            "C0000000000000000000000000000000000000000000000000000000000003C7",
+            /* n */
+            "5fffffffffffffffffffffffffffffff606117a2f4bde428b7458a54b6e87b85",
+            /* h */
+            "1"
+        },
+        /* sm2 test vector */
+        {
+            NID_undef,
+            "787968B4FA32C3FD2417842E73BBFEFF2F3C848B6831D7E0EC65228B3937E498",
+            "63E4C6D3B23B0C849CF84241484BFE48F61D59A5B16BA06E6E12D1DA27C5249A",
+            "421DEBD61B62EAB6746434EBC3CC315E32220B3BADD50BDC4C4E6C147FEDD43D",
+            "0680512BCBB42C07D47349D2153B70C4E5D7FDFCBFA36EA1A85841B9E46E09A2",
+            "8542D69E4C044F18E8B92435BF6FF7DE457283915C45517D722EDB8B08F1DFC3",
+            "8542D69E4C044F18E8B92435BF6FF7DD297720630485628D5AE74EE7C32E79B7",
+            "1"
+        },
+        /* curve from sm2 parameter definition */
+        {
+            NID_undef,
+            "fffffffeffffffffffffffffffffffffffffffff00000000fffffffffffffffc",
+            "28e9fa9e9d9f5e344d5a9e4bcf6509a7f39789f515ab8f92ddbcbd414d940e93",
+            "32c4ae2c1f1981195f9904466a39c9948fe30bbff2660be1715a4589334c74c7",
+            "bc3736a2f4f6779c59bdcee36b692153d0a9877cc62A474002df32e52139f0a0",
+            "fffffffeffffffffffffffffffffffffffffffff00000000ffffffffffffffff",
+            "fffffffeffffffffffffffffffffffff7203df6b21c6052b53bbf40939d54123",
+            "1"
+        },
+        /* Last Case */
+        {
+            0, NULL, NULL, NULL, NULL, NULL, NULL
+        }
+    };
+```
+
+As you can see, we defined all of parameters above have NID_undef which we will dynamically assign NID to them.
+
+Next, defining all methods required in `EVP_PKEY_METHOD`  and `EVP_PKEY_ASN1_METHOD`.
+
+I haven't figure out what's with these ASN.1 functions, but I know they are related to certificate or pkcs12 formatting. We don't need them yet, so we leave some NULLs here.
+
+```
+// sm2_ameth.c
+
+#include <openssl/evp.h>
+
+#include "../conf/objects.h"
+#include "../err/ccs_err.h"
+#include "pkey_lcl.h"
+
+int
+evp_sm2_register_ameth(int nid,
+                       EVP_PKEY_ASN1_METHOD **ameth,
+                       const char *pemstr,
+                       const char *info)
+{
+
+    *ameth = EVP_PKEY_asn1_new(nid, ASN1_PKEY_SIGPARAM_NULL, pemstr, info);
+    if (!*ameth)
+    {
+        CCSerr(CCS_F_ASN1_REGISTRATION, CCS_R_MALLOC_ERROR);
+        return 0;
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        EVP_PKEY_asn1_set_free(*ameth, evp_sm2_free);
+        EVP_PKEY_asn1_set_private(*ameth, NULL, NULL, NULL);
+        EVP_PKEY_asn1_set_param(*ameth, NULL, NULL, NULL, NULL, NULL, NULL);
+        EVP_PKEY_asn1_set_public(*ameth, NULL, NULL, NULL, NULL, NULL, NULL);
+        EVP_PKEY_asn1_set_ctrl(*ameth, NULL);
+    }
+    else
+    {
+        CCSerr(CCS_F_ASN1_REGISTRATION, CCS_R_UNSUPPORTED_ALGORITHM);
+        return 0;
+    }
+    return 1;
+}
+
+static void
+evp_sm2_free(EVP_PKEY *key)
+{
+    if (key->pkey.ec)
+    {
+        EC_KEY_free(key->pkey.ec);
+    }
+}
+```
+
+
+```
+// sm2_pmeth.c
+
+This is really a long list, see source code.
+Complete all list below except (just return 1;)
+    encrypt
+    decrypt
+    sign
+    verify
+
+int
+evp_sm2_register_pmeth(int nid, EVP_PKEY_METHOD **pmeth, int flags)
+{
+    *pmeth = EVP_PKEY_meth_new(nid, flags);
+
+    if (!*pmeth)
+    {
+        CCSerr(CCS_F_PKEY_REGISTRATION, CCS_R_MALLOC_ERROR);
+        return 0;
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        EVP_PKEY_meth_set_init(*pmeth, evp_sm2_init);
+        EVP_PKEY_meth_set_copy(*pmeth, evp_sm2_copy);
+        EVP_PKEY_meth_set_cleanup(*pmeth, evp_sm2_cleanup);
+
+        EVP_PKEY_meth_set_paramgen(*pmeth,
+                                   evp_sm2_paramgen_init,
+                                   evp_sm2_paramgen);
+        EVP_PKEY_meth_set_keygen(*pmeth, evp_sm2_keygen_init, evp_sm2_keygen);
+
+        EVP_PKEY_meth_set_sign(*pmeth, NULL, evp_sm2_sign);
+        EVP_PKEY_meth_set_verify(*pmeth, NULL, evp_sm2_verify);
+
+        EVP_PKEY_meth_set_encrypt(*pmeth,
+                                  evp_sm2_encrypt_init,
+                                  evp_sm2_encrypt);
+        EVP_PKEY_meth_set_decrypt(*pmeth,
+                                  evp_sm2_decrypt_init,
+                                  evp_sm2_decrypt);
+        EVP_PKEY_meth_set_derive(*pmeth, evp_sm2_derive_init, evp_sm2_derive);
+        EVP_PKEY_meth_set_ctrl(*pmeth, evp_sm2_ctrl, evp_sm2_ctrl_str);
+        return 1;
+    }
+
+    CCSerr(CCS_F_PKEY_REGISTRATION, CCS_R_UNSUPPORTED_ALGORITHM);
+
+    return 0;
+}
+
+```
+The only special function we need to talk about is `EVP_PKEY_meth_set_ctrl`. When we working with EVP, our algorithm may require additional information not specified by EVP, we can use `ctrl` to update these information.
+
+For example, we can `ctrl` to update information to `pkey_ctx_t` which
+is sm2 internal context.  
+
+```
+//conf/objects.h
+
+#define EVP_PKEY_SET_PEER_KEY       "evp-pkey-set-peer-key"
+#define EVP_PKEY_SET_MY_KEY         "evp-pkey-set-my-key"
+#define EVP_PKEY_SET_ZA             "evp-pkey-set-za"
+#define EVP_PKEY_SET_ZB             "evp-pkey-set-zb"
+#define EVP_PKEY_SET_CURVE_BY_SN    "evp-pkey-set-curve-id"
+
+// sm2_pmeth.c
+
+static int
+evp_sm2_ctrl_str(EVP_PKEY_CTX *ctx, const char *type, const char *value)
+{
+    pkey_ctx_t *pctx = EVP_PKEY_CTX_get_data(ctx);
+    if (!pctx)
+        return 0;
+
+    if (!strcmp(type, EVP_PKEY_SET_PEER_KEY))
+        pctx->static_peer_pub = (EVP_PKEY *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_MY_KEY))
+        pctx->static_my_key = (EVP_PKEY *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_ZA))
+        pctx->za = (uint8_t *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_ZB))
+        pctx->zb = (uint8_t *) value;
+    else if (!strcmp(type, EVP_PKEY_SET_CURVE_BY_SN))
+        pctx->curve_id = OBJ_sn2nid(value);
+    else
+        return 0;
+
+    return 1;
+}
+```
+
+We have defined some new error codes in `sm2_pmeth.c`, update them to `ccs_err.*` by run script
+
+```
+perl mkerr.pl -conf ccs.ec -write ../pkey/sm2_pmeth.c
+```
+
+Next, in link control logic, we expose two method registration functions, so the engine knows where to find SM2 functions.
+
+```
+// pkey_lcl.h
+
+#include <openssl/objects.h>
+
+#include "sm2.h"
+
+static int sm2_pkey_ids = {NID_undef};
+
+/**
+ * register public key functions to engine.
+ *
+ * @param nid
+ *      id of SM2
+ * @param pmeth
+ *      public key function reference
+ * @param flags
+ *      no idea, FIXME
+ * @return
+ *      1 for success, 0 on error.
+ */
+int
+evp_sm2_register_pmeth(int nid, EVP_PKEY_METHOD **pmeth, int flags);
+
+/**
+ * register sm2 asn.1 functions to engine.
+ *
+ * TODO ameth parameters
+ * figure out the meaning of following params
+ *
+ * @param nid
+ *      id of SM2
+ * @param ameth
+ *      ASN.1 function reference
+ * @param pemstr
+ *      FIXME
+ * @param info
+ *      FIXME
+ * @return
+ *      1 if success, 0 on error
+ */
+int
+evp_sm2_register_ameth(int nid,
+                       EVP_PKEY_ASN1_METHOD **ameth,
+                       const char *pemstr,
+                       const char *info);
+
+```
+
+Finally, the engine, add new algorithm selectors and register SM2 functions.
+
+```
+// engine.c
+
+static int
+ccs_pkey_selector(ENGINE *e,
+                  EVP_PKEY_METHOD **pmeth,
+                  const int **nids,
+                  int nid)
+{
+    if (!pmeth)
+    {
+        *nids = &ccs_pkey_ids;
+        return 3; /* three available */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        *pmeth = sm2_pmeth;
+        return 1;
+    }
+
+    CCSerr(CCS_F_PKEY_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *pmeth = NULL;
+    return 0;
+}
+
+static int
+ccs_asn1_selector(ENGINE *e,
+                  EVP_PKEY_ASN1_METHOD **ameth,
+                  const int **nids,
+                  int nid)
+{
+    if (!ameth)
+    {
+        *nids = &ccs_pkey_ids;
+        return 1; /* one available */
+    }
+
+    if (nid == OBJ_sn2nid(SN_sm2))
+    {
+        *ameth = sm2_ameth;
+        return 1;
+    }
+
+    CCSerr(CCS_F_ASN1_SELECT, CCS_R_UNSUPPORTED_ALGORITHM);
+    *ameth = NULL;
+    return 0;
+}
+
+static int
+bind(ENGINE *e, const char *d)
+{
+    int ret = 0;
+    
+    // ... //
+    
+    ec_param_fp_t *param = ec_param_fp_set;
+    nid = OBJ_create(OID_gost_cc_curve, SN_gost_cc_curve, LN_gost_cc_curve);
+    param++->nid = nid;
+
+    nid = OBJ_create(OID_sm2_test_curve, SN_sm2_test_curve, LN_sm2_test_curve);
+    param++->nid = nid;
+
+    nid = OBJ_create(OID_sm2_param_def, SN_sm2_param_def, LN_sm2_param_def);
+    param->nid = nid;
+
+    nid = OBJ_create(OID_sm2, SN_sm2, LN_sm2);
+    ccs_pkey_ids = nid;
+
+    evp_sm2_register_pmeth(nid, &sm2_pmeth, 0);
+    evp_sm2_register_ameth(nid, &sm2_ameth, "", "");
+    if (!ENGINE_set_digests(e, ccs_digest_selector)
+        || !ENGINE_set_pkey_meths(e, ccs_pkey_selector)
+        || !ENGINE_set_pkey_asn1_meths(e, ccs_asn1_selector))
+        return 0;
+        
+    // .. //
+}
+```
+
+Test
+
+```
+// test.c
+
+int
+test_ecdh()
+{
+    // REVIEW following line seems have no effect
+    //ENGINE_set_default_pkey_meths(engine);
+    ENGINE_set_default_pkey_asn1_meths(engine);
+
+    EVP_PKEY_CTX *pctx, *kctx, *ctx;
+    unsigned char *secret;
+    size_t secret_len = 0;
+    EVP_PKEY *pkey = NULL, *peer = NULL;
+
+    int sm2_id = OBJ_sn2nid("sm2");
+
+    if (NULL == (kctx = EVP_PKEY_CTX_new_id(sm2_id, engine)))
+        return 0;
+
+    /*
+     * REVIEW reference to library header
+     * test program need to reference additional header other than .so
+     */
+
+    if (1 != EVP_PKEY_keygen_init(kctx))
+        return 0;
+
+    if (1 != EVP_PKEY_keygen(kctx, &pkey))
+        return 0;
+
+    pctx = EVP_PKEY_CTX_new_id(sm2_id, engine);
+
+    EVP_PKEY_keygen_init(pctx);
+    EVP_PKEY_keygen(pctx, &peer);
+
+    // start derive
+    if (NULL == (ctx = EVP_PKEY_CTX_new(pkey, engine)))
+        return 0;
+
+    // my static
+    EC_KEY *sta_key = EC_KEY_new();
+    EC_KEY_set_group(sta_key, EC_KEY_get0_group(EVP_PKEY_get0(pkey)));
+    BIGNUM *m_sta = BN_new();
+    const char *m_sta_hex =
+        "6fcba2ef9ae0ab902bc3bde3ff915d44ba4cc78f88e2f8e7f8996d3b8cceedee";
+    BN_hex2bn(&m_sta, m_sta_hex);
+    EC_KEY_set_private_key(sta_key, m_sta);
+    const char *m_sta_x_hex =
+        "3099093bf3c137d8fcbbcdf4a2ae50f3b0f216c3122d79425fe03a45dbfe1655";
+    const char *m_sta_y_hex =
+        "3df79e8dac1cf0ecbaa2f2b49d51a4b387f2efaf482339086a27a8e05baed98b";
+    BIGNUM *m_sta_x = BN_new();
+    BN_hex2bn(&m_sta_x, m_sta_x_hex);
+    BIGNUM *m_sta_y = BN_new();
+    BN_hex2bn(&m_sta_y, m_sta_y_hex);
+    EC_KEY_set_public_key_affine_coordinates(sta_key, m_sta_x, m_sta_y);
+    EVP_PKEY *sta = EVP_PKEY_new();
+    EVP_PKEY_set1_EC_KEY(sta, sta_key);
+    EC_KEY_free(sta_key);
+    BN_free(m_sta);
+    BN_free(m_sta_x);
+    BN_free(m_sta_y);
+
+    //peer static
+    EC_KEY *sta_peer = EC_KEY_new();
+    EC_KEY_set_group(sta_peer, EC_KEY_get0_group(EVP_PKEY_get0(pkey)));
+    const char *p_sta_x_hex =
+        "245493d446c38d8cc0f118374690e7df633a8a4bfb3329b5ece604b2b4f37f43";
+    const char *p_sta_y_hex =
+        "53c0869f4b9e17773de68fec45e14904e0dea45bf6cecf9918c85ea047c60a4c";
+    BIGNUM *p_sta_x = BN_new();
+    BN_hex2bn(&p_sta_x, p_sta_x_hex);
+    BIGNUM *p_sta_y = BN_new();
+    BN_hex2bn(&p_sta_y, p_sta_y_hex);
+    EC_KEY_set_public_key_affine_coordinates(sta_peer, p_sta_x, p_sta_y);
+    EVP_PKEY *sta_p = EVP_PKEY_new();
+    EVP_PKEY_set1_EC_KEY(sta_p, sta_peer);
+    EC_KEY_free(sta_peer);
+    BN_free(p_sta_x);
+    BN_free(p_sta_y);
+
+    unsigned char uza[] =
+        {0xe4, 0xd1, 0xd0, 0xc3, 0xca, 0x4c, 0x7f, 0x11, 0xbc, 0x8f, 0xf8, 0xcb,
+            0x3f, 0x4c, 0x02, 0xa7, 0x8f, 0x10, 0x8f, 0xa0, 0x98, 0xe5, 0x1a,
+            0x66, 0x84, 0x87, 0x24, 0x0f, 0x75, 0xe2, 0x0f, 0x31};
+    unsigned char uzb[] =
+        {0x6b, 0x4b, 0x6d, 0x0e, 0x27, 0x66, 0x91, 0xbd, 0x4a, 0x11, 0xbf, 0x72,
+            0xf4, 0xfb, 0x50, 0x1a, 0xe3, 0x09, 0xfd, 0xac, 0xb7, 0x2f, 0xa6,
+            0xcc, 0x33, 0x6e, 0x66, 0x56, 0x11, 0x9a, 0xbd, 0x67};
+
+    unsigned char *pa = OPENSSL_malloc(33);
+    unsigned char *pb = OPENSSL_malloc(33);
+    memset(pa, '\0', 33);
+    memcpy(pa, uza, 32);
+    memset(pb, '\0', 33);
+    memcpy(pb, uzb, 32);
+
+    EVP_PKEY_CTX_ctrl_str(ctx, EVP_PKEY_SET_PEER_KEY, (char *) sta_p);
+    EVP_PKEY_CTX_ctrl_str(ctx, EVP_PKEY_SET_MY_KEY, (char *) sta);
+    EVP_PKEY_CTX_ctrl_str(ctx, EVP_PKEY_SET_ZA, (char *) pa);
+    EVP_PKEY_CTX_ctrl_str(ctx, EVP_PKEY_SET_ZB, (char *) pb);
+
+    #if 0
+    pkey_ctx_t *data = EVP_PKEY_CTX_get_data(ctx);
+    data->static_peer_pub = sta_p;
+    data->static_my_key = sta;
+    data->za = pa;
+    data->zb = pb;
+    #endif
+
+    EVP_PKEY_derive_init(ctx);
+
+    EVP_PKEY_derive_set_peer(ctx, peer);
+
+    EVP_PKEY_derive(ctx, NULL, &secret_len);
+
+    secret = OPENSSL_malloc(secret_len);
+
+    EVP_PKEY_derive(ctx, secret, &secret_len);
+
+    printf("-----\nderived key is ");
+    for (int i = 0; i < secret_len; ++i)
+        printf("%02x", secret[i]);
+    printf("\n");
+
+    unsigned char expect_key[] =
+        {0x55, 0xb0, 0xac, 0x62, 0xa6, 0xb9, 0x27, 0xba, 0x23, 0x70, 0x38, 0x32,
+            0xc8, 0x53, 0xde, 0xd4};
+
+    int pass = CRYPTO_memcmp(expect_key, secret, 16);
+    if (pass)
+        FAIL;
+    else
+        PASS;
+
+    OPENSSL_free(secret);
+    OPENSSL_free(pa);
+    OPENSSL_free(pb);
+
+    EVP_PKEY_free(sta_p);
+    EVP_PKEY_free(sta);
+    EVP_PKEY_CTX_free(ctx);
+    EVP_PKEY_free(peer);
+    EVP_PKEY_free(pkey);
+    EVP_PKEY_CTX_free(kctx);
+    EVP_PKEY_CTX_free(pctx);
+
+    return (pass) ? 0 : 1;
+    
+```
+
+Also update Makefile and run.  
+*Note* we need to send `DEBUG` flag when compiling pmeth for tests.
+
+```
+// Makefile
+
+$(DEP_pmeth) : $(SRC_pmeth)
+        $(CC) $(FLAG_dep) -DDEBUG -o $@ -c $<
+```
+
+On success (DEBUG 1), your output should look like
+
+```
+-----
+derived key is 55b0ac62a6b927ba23703832c853ded4
+test passed.
+
+```
+
+Note if you set DEBUG 0, ecdh test always fails cuz it meant to test the key pairs provided on Standard document, DEBUG 0 generates random ephemeral keys.
+
+Check with valgrind.
+
+## <a name="pkey"></a> Completing Public Key
+
+Do the same as ECDH, complete `encrypt`, `decrypt`, `sign`, `verify`.
+
+We left ASN.1 part, if you ever need them, feel free to do them yourself.
+
+Update error code, Makefile, check with valgrind.
+
