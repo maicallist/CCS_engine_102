@@ -18,7 +18,7 @@ If you ever need algorithms not yet provided in any cryptographic libraries, con
 
 ## Documentation
 
-see doc/ccs\_engine\_dev.md for detailed walk through.
+see docs/ccs\_engine\_dev.md for detailed walk through.
 
 ## OpenSSL Version
 
@@ -31,7 +31,7 @@ OpenSSL 1.0.2 required for this demo
 * CentOS 7.4.1708
 
 ## Usage
-TBA
+see test.c and docs/
 
 ## License
 This project is licensed under the GPLv3 License - see the COPYING file for details
